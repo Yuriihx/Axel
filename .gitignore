@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+data/
+test_data/
+creds.json*
+subaccounts.json*
+presets.json*
+meta.json*
+bodies.json*
+*.log
+*.zip
