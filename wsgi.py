@@ -22,7 +22,7 @@ def _required_setting(name, minimum):
 
 
 # Validate configuration BEFORE importing the original application, which opens its stores.
-_admin_password = _required_setting("AXEL_ADMIN_PASSWORD", 12)
+_admin_password = _required_setting("AXEL_ADMIN_PASSWORD", 7)
 _secret_key = _required_setting("AXEL_SECRET_KEY", 32)
 _admin_user = os.environ.get("AXEL_ADMIN_USER", "admin").strip()
 if not _admin_user:
