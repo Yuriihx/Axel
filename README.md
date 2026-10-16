@@ -2,13 +2,15 @@
 
 Este pacote preserva o sistema Flask, incluindo os botões prontos, o rodapé do corpo Padrão e a confirmação de empresa divergente. A versão hospedada acrescenta login e armazenamento PostgreSQL, para que os reinícios do servidor não apaguem subcontas, corpos salvos ou configurações.
 
-## Serviços preparados
+## Instalação publicada
 
 - **Render Free:** executa o servidor Python, sem disco pago.
 - **Neon Free:** mantém os cinco registros do AXEL em PostgreSQL, separados dos arquivos temporários do servidor.
 - **Acesso:** usuário e senha do administrador; todas as telas e APIs do sistema exigem sessão autenticada.
 
-O projeto **AXEL GHL** já foi criado no Neon, na conta com plano `free_v3`, com identificador `withered-darkness-70106807`. Reutilize esse projeto. A criação do projeto não significa que a tabela já foi inicializada ou que o servidor está publicado. A implantação no Render e o teste real de conexão PostgreSQL ainda estão pendentes; não há endereço público do AXEL confirmado.
+Publicado e verificado em 16/10/2026: [abrir AXEL](https://axel-ghl.onrender.com). O serviço `axel-ghl` está no Render Free, em Yuri's workspace. O banco usa o projeto Neon **AXEL GHL** (`withered-darkness-70106807`), branch `axel-render` (`br-shy-breeze-b7ppj7ks`), banco `axel`. Reutilize esses recursos.
+
+As credenciais do administrador foram entregues separadamente. A senha e a conexão do banco ficam nas variáveis do Render; não devem ser incluídas no repositório.
 
 ## Limites do gratuito
 
@@ -20,10 +22,10 @@ Condições consultadas em 16/10/2026:
 
 Fontes: [Render Free](https://render.com/docs/free) e [Neon Free](https://neon.com/pricing).
 
-## Publicação
+## Republicação
 
 1. Usar o projeto Neon existente **AXEL GHL** e disponibilizar a conexão Render à conversa responsável pela publicação. Não criar outro projeto Neon para repetir esta preparação.
-2. Conectar ao Render um repositório Git privado contendo os arquivos deste pacote na raiz. Não incluir credenciais, arquivos `.env` reais nem dados do AXEL.
+2. Conectar ao Render um repositório Git contendo os arquivos deste pacote na raiz. Não incluir credenciais, arquivos `.env` reais nem dados do AXEL.
 3. Criar o serviço a partir de `render.yaml` e confirmar que o plano escolhido é **Free**, sem disco pago.
 4. Configurar `DATABASE_URL` com a conexão PostgreSQL fornecida pelo Neon, com SSL obrigatório. Guardar a conexão como variável secreta do Render.
 5. Configurar `AXEL_ADMIN_PASSWORD` com pelo menos 12 caracteres. O usuário inicial é `admin`; a chave de sessão `AXEL_SECRET_KEY` é gerada pelo provedor.
@@ -58,3 +60,6 @@ Gunicorn usa uma instância com um processo e quatro threads, preservando os blo
 Os testes locais de autenticação bloqueiam rede externa e usam dados descartáveis. Os testes de armazenamento executam o contrato SQL com um adaptador SQLite de teste, incluindo uma rota real do AXEL; eles não substituem o teste de conexão com PostgreSQL/Neon feito durante a implantação.
 
 Os arquivos principais são `axel_ghl21.py`, `wsgi.py`, `postgres_store.py`, `init_storage.py`, `gunicorn.conf.py`, `requirements.txt`, `.python-version` e `render.yaml`. `.gitignore` exclui arquivos sensíveis e dados de execução.
+
+
+Validação da instalação publicada: `/healthz` respondeu 200, login do administrador funcionou, a API anônima retornou 401 e um registro temporário foi gravado e lido no banco por outra sessão. O registro foi removido e os corpos anteriores foram preservados. Nenhuma chamada de criação ou exclusão de modelo foi enviada ao GHL.
