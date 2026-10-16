@@ -28,7 +28,7 @@ Fontes: [Render Free](https://render.com/docs/free) e [Neon Free](https://neon.c
 2. Conectar ao Render um repositório Git contendo os arquivos deste pacote na raiz. Não incluir credenciais, arquivos `.env` reais nem dados do AXEL.
 3. Criar o serviço a partir de `render.yaml` e confirmar que o plano escolhido é **Free**, sem disco pago.
 4. Configurar `DATABASE_URL` com a conexão PostgreSQL fornecida pelo Neon, com SSL obrigatório. Guardar a conexão como variável secreta do Render.
-5. Configurar `AXEL_ADMIN_PASSWORD` com pelo menos 12 caracteres. O usuário inicial é `admin`; a chave de sessão `AXEL_SECRET_KEY` é gerada pelo provedor.
+5. Configurar `AXEL_ADMIN_PASSWORD` com pelo menos 7 caracteres. O usuário inicial é `admin`; a chave de sessão `AXEL_SECRET_KEY` é gerada pelo provedor.
 6. Aguardar a implantação e conferir o endereço HTTPS emitido pelo Render. A tela inicial deve exigir login e as APIs sem sessão devem retornar 401.
 7. Entrar e cadastrar as subcontas. Nenhum dado ou token do computador é importado automaticamente.
 
@@ -41,7 +41,7 @@ O comando de inicialização prepara uma tabela com `CREATE TABLE IF NOT EXISTS`
 | `AXEL_STORAGE_MODE` | `postgres` na hospedagem gratuita |
 | `DATABASE_URL` | Conexão secreta do Neon, com SSL |
 | `AXEL_ADMIN_USER` | Usuário de login; inicialmente `admin` |
-| `AXEL_ADMIN_PASSWORD` | Senha secreta, mínimo 12 caracteres |
+| `AXEL_ADMIN_PASSWORD` | Senha secreta, mínimo 7 caracteres |
 | `AXEL_SECRET_KEY` | Chave secreta de sessão, mínimo 32 caracteres |
 | `AXEL_DATA_DIR` | `/tmp/axel`, usada apenas como pasta de execução no modo PostgreSQL |
 
