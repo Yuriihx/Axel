@@ -197,6 +197,9 @@ def hosting_response_headers(response):
         logout = render_template_string(_LOGOUT_FORM, csrf_token=_csrf_token())
         html = response.get_data(as_text=True)
         response.set_data(html.replace("</header>", logout + "</header>", 1))
+    if request.endpoint in {"index", "hosting_login"} and response.status_code == 200 and response.mimetype == "text/html":
+        html = response.get_data(as_text=True)
+        response.set_data(html.replace("</body>", _CREATOR_WATERMARK + "</body>", 1))
     response.headers["Cache-Control"] = "no-store, private"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -211,6 +214,15 @@ _LOGOUT_FORM = """
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <button type="submit" style="border:1px solid #22322d;border-radius:9px;padding:9px 15px;background:#141f1c;color:#e9f2ee;cursor:pointer;font:14px system-ui">Sair do AXEL</button>
 </form>
+"""
+
+_CREATOR_WATERMARK = """
+<style>
+.axel-creator-watermark{position:fixed;left:12px;bottom:3px;z-index:850;max-width:calc(100vw - 24px);color:#9bb7aa;opacity:.76;font:11px/1.4 system-ui,sans-serif;letter-spacing:.02em;text-shadow:0 1px 3px #000;pointer-events:none;user-select:none}
+.axel-creator-watermark strong{font-weight:600}
+@media(max-width:480px){.axel-creator-watermark{font-size:9px}}
+</style>
+<aside class="axel-creator-watermark" aria-label="Criador do sistema: Yuri Bibiano dos Santos">Criado por <strong>Yuri Bibiano dos Santos</strong></aside>
 """
 
 _LOGIN_PAGE = """<!doctype html>
