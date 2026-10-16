@@ -15,7 +15,7 @@ WORK = PROJECT.parents[1] / "work" / "hosting-tests"
 WORK.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(PROJECT))
 BASE = "https://axel-test.example"
-PASSWORD = "a-test-password-123456"
+PASSWORD = "test123"
 
 
 def forbid_network(*args, **kwargs):
