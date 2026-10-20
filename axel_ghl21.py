@@ -167,7 +167,7 @@ PAGE = """
 <title>AXEL — GHL (local)</title>
 <style>
   :root{
-    --bg:#0e1614; --panel:#141f1c; --border:#22322d; --text:#e9f2ee;
+    --bg:#0e1614; --panel:#141f1c; --border:#22322d; --card-edge:#2d463a; --card-edge-hover:#447356; --text:#e9f2ee;
     --muted:#8ba39a; --accent:#25d597; --accent-dim:#173c30; --danger:#ff6b6b; --warn:#e0b64a;
     --mono:'SF Mono','JetBrains Mono',ui-monospace,monospace;
   }
@@ -246,13 +246,15 @@ PAGE = """
   p.sub{color:var(--muted);font-size:14px;margin-top:0;}
   .panel{
     background:rgba(20,31,28,.82);
-    border:1px solid var(--border);
+    border:1px solid var(--card-edge);
     border-radius:14px;
     padding:20px;
     margin-bottom:16px;
     backdrop-filter:blur(6px);
     -webkit-backdrop-filter:blur(6px);
+    transition:border-color .2s ease;
   }
+  .panel:hover{border-color:var(--card-edge-hover);}
   .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 14px;}
   label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;}
   input,textarea,select{width:100%;background:#0b1512;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;margin-bottom:14px;}
@@ -289,7 +291,8 @@ PAGE = """
   details summary{cursor:pointer;color:var(--accent);font-size:13px;margin-bottom:14px;}
   .empty{color:var(--muted);font-size:13px;text-align:center;padding:16px 0;}
   /* ---- timer do token de sessão ---- */
-  .token-timer{margin:2px 0 12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#0b1512;}
+  .token-timer{margin:2px 0 12px;padding:10px 12px;border:1px solid var(--card-edge);border-radius:8px;background:#0b1512;transition:border-color .2s ease;}
+  .token-timer:hover{border-color:var(--card-edge-hover);}
   .token-timer .tt-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
   .token-timer .tt-title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
   .token-timer .tt-label{font-family:var(--mono);font-size:22px;font-weight:800;color:var(--muted);}
@@ -329,7 +332,7 @@ PAGE = """
   .htype svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
   .htype:hover{border-color:#3a5a50;color:var(--text);}
   .htype.on{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
-  .media-box{border:1px dashed var(--border);border-radius:10px;padding:12px;margin-bottom:14px;}
+  .media-box{border:1px dashed var(--card-edge);border-radius:10px;padding:12px;margin-bottom:14px;}
   .media-drop{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px;border-radius:8px;cursor:pointer;
     color:var(--accent);font-size:13px;text-align:center;}
   .media-drop:hover{background:#0f1f1a;}
@@ -343,7 +346,8 @@ PAGE = """
   .media-item .ph{height:70px;display:flex;align-items:center;justify-content:center;font-size:22px;}
   .media-item.on{border-color:var(--accent);color:var(--accent);}
   /* ---- botões ---- */
-  .btn-item{border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;background:#0b1512;}
+   .btn-item{border:1px solid var(--card-edge);border-radius:10px;padding:10px;margin-bottom:8px;background:#0b1512;transition:border-color .2s ease;}
+  .btn-item:hover{border-color:var(--card-edge-hover);}
   .btn-item .bi-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
   .btn-item .bi-top .tag{flex-shrink:0;}
   .btn-item input{margin-bottom:8px;}
@@ -359,7 +363,7 @@ PAGE = """
 
   /* ---- pré-visualização estilo WhatsApp (Atualização 17.1) ---- */
   .wa-dock{position:fixed;right:18px;bottom:18px;z-index:900;width:330px;max-width:calc(100vw - 32px);
-    background:rgba(20,31,28,.97);border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.55);
+    background:rgba(20,31,28,.97);border:1px solid var(--card-edge);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.55);
     display:flex;flex-direction:column;max-height:calc(100vh - 36px);}
   .wa-dock-head{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;user-select:none;
     font-size:13px;font-weight:650;color:var(--text);border-bottom:1px solid var(--border);}
@@ -442,7 +446,7 @@ PAGE = """
   .axel-dialog-icon{display:grid;place-items:center;width:26px;height:26px;border:1px solid #536849;border-radius:50%;color:#d7e9a0;font-size:13px;letter-spacing:0}
   .axel-dialog h2{margin:0 0 10px;font-size:25px;line-height:1.2;font-weight:650;letter-spacing:-.035em}
   .axel-dialog-message{margin:0;color:#adbbb3;font-size:14px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
-  .axel-dialog-details{display:grid;gap:0;margin:20px 0 0;padding:4px 16px;border:1px solid #304139;border-radius:13px;background:#0b140f80}
+  .axel-dialog-details{display:grid;gap:0;margin:20px 0 0;padding:4px 16px;border:1px solid var(--card-edge);border-radius:13px;background:#0b140f80}
   .axel-dialog-details>div{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;padding:11px 0;border-bottom:1px solid #25372d}
   .axel-dialog-details>div:last-child{border:0}
   .axel-dialog-details dt{color:#8ca196;font-size:12px}
@@ -453,7 +457,7 @@ PAGE = """
   .axel-dialog-info{min-width:0}
   .axel-dialog-info .axel-dialog-details{margin:0}
   .axel-dialog.axel-dialog-review .axel-dialog-details>div{grid-template-columns:84px minmax(0,1fr);gap:10px}
-  .axel-dialog-preview{min-width:0;border:1px solid #304139;border-radius:14px;background:#0b140f80;overflow:hidden}
+  .axel-dialog-preview{min-width:0;border:1px solid var(--card-edge);border-radius:14px;background:#0b140f80;overflow:hidden}
   .axel-dialog-preview-title{padding:11px 13px;color:#c9d8ce;font-size:12px;font-weight:650;border-bottom:1px solid #25372d}
   .axel-dialog-preview .wa-screen{max-height:min(52vh,440px);min-height:180px;padding:12px;}
   .axel-dialog-preview .wa-bubble{max-width:100%}
