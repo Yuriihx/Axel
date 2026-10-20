@@ -435,6 +435,7 @@ PAGE = """
   @keyframes splashAuto{to{opacity:0;visibility:hidden;}}
   @media (prefers-reduced-motion:reduce){.splash{display:none;}}
   .axel-dialog{position:fixed;inset:0;margin:auto;width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);padding:28px;border:1px solid #34443e;border-radius:22px;background:linear-gradient(145deg,#192720,#101a16);color:#edf5f0;box-shadow:0 32px 100px #0009;font-family:var(--sans,system-ui,sans-serif);overflow:auto}
+  .axel-dialog.axel-dialog-review{width:min(980px,calc(100vw - 32px))}
   .axel-dialog::backdrop{background:#030a07ba;backdrop-filter:blur(6px)}
   .axel-dialog[open]{animation:axelDialogIn .18s ease-out}
   .axel-dialog-top{display:flex;align-items:center;gap:9px;margin-bottom:18px;color:#9cb1a6;font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase}
@@ -447,6 +448,16 @@ PAGE = """
   .axel-dialog-details dt{color:#8ca196;font-size:12px}
   .axel-dialog-details dd{margin:0;color:#e8f1eb;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
   .axel-dialog-details dd[data-code]{font-family:var(--mono,monospace);font-size:11px}
+  .axel-dialog-review-grid{display:block}
+  .axel-dialog.axel-dialog-review .axel-dialog-review-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,340px);gap:22px;align-items:start;margin-top:20px}
+  .axel-dialog-info{min-width:0}
+  .axel-dialog-info .axel-dialog-details{margin:0}
+  .axel-dialog.axel-dialog-review .axel-dialog-details>div{grid-template-columns:84px minmax(0,1fr);gap:10px}
+  .axel-dialog-preview{min-width:0;border:1px solid #304139;border-radius:14px;background:#0b140f80;overflow:hidden}
+  .axel-dialog-preview-title{padding:11px 13px;color:#c9d8ce;font-size:12px;font-weight:650;border-bottom:1px solid #25372d}
+  .axel-dialog-preview .wa-screen{max-height:min(52vh,440px);min-height:180px;padding:12px;}
+  .axel-dialog-preview .wa-bubble{max-width:100%}
+  .axel-dialog-preview-foot{margin:0;padding:9px 12px;color:#9cb1a6;font-size:10px;line-height:1.5;border-top:1px solid #25372d}
   .axel-dialog-warning{margin:16px 0 0;padding:12px 14px;border:1px solid #765a33;border-radius:11px;background:#614b221c;color:#e6c58d;font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
   .axel-dialog-note{margin:12px 0 0;color:#82998c;font-size:11px;line-height:1.5}
   .axel-dialog-input{width:100%;box-sizing:border-box;margin-top:18px;padding:12px 14px;border:1px solid #405648;border-radius:10px;background:#0a130e;color:#edf5f0;font:14px system-ui,sans-serif}
@@ -458,6 +469,8 @@ PAGE = """
   .axel-dialog-actions button:focus-visible,.axel-dialog-input:focus-visible{outline:2px solid #a4d6b1;outline-offset:3px}
   .axel-dialog [hidden]{display:none!important}
   @keyframes axelDialogIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+  @media(max-width:760px){.axel-dialog.axel-dialog-review .axel-dialog-review-grid{grid-template-columns:minmax(0,1fr) minmax(220px,270px);gap:14px}.axel-dialog.axel-dialog-review .axel-dialog-details>div{grid-template-columns:72px minmax(0,1fr);gap:8px}.axel-dialog-preview .wa-screen{max-height:52vh;min-height:150px}}
+  @media(max-width:500px){.axel-dialog.axel-dialog-review .axel-dialog-review-grid{grid-template-columns:minmax(0,1fr);gap:16px}.axel-dialog-preview .wa-screen{max-height:40vh;min-height:150px}.axel-dialog.axel-dialog-review{padding:20px}}
   @media(max-width:480px){.axel-dialog{padding:23px;border-radius:18px}.axel-dialog h2{font-size:23px}.axel-dialog-details>div{grid-template-columns:80px minmax(0,1fr);gap:8px}.axel-dialog-actions button{flex:1;padding:10px}}
   @media(prefers-reduced-motion:reduce){.axel-dialog[open]{animation:none}}
 </style>
@@ -467,9 +480,18 @@ PAGE = """
   <div class="axel-dialog-top"><span class="axel-dialog-icon" aria-hidden="true">!</span><span id="axelDialogEyebrow">AXEL · AVISO</span></div>
   <h2 id="axelDialogTitle"></h2>
   <p id="axelDialogMessage" class="axel-dialog-message"></p>
-  <dl id="axelDialogDetails" class="axel-dialog-details" hidden></dl>
-  <p id="axelDialogWarning" class="axel-dialog-warning" hidden></p>
-  <p id="axelDialogNote" class="axel-dialog-note" hidden></p>
+  <div id="axelDialogReviewGrid" class="axel-dialog-review-grid">
+    <div class="axel-dialog-info">
+      <dl id="axelDialogDetails" class="axel-dialog-details" hidden></dl>
+      <p id="axelDialogWarning" class="axel-dialog-warning" hidden></p>
+      <p id="axelDialogNote" class="axel-dialog-note" hidden></p>
+    </div>
+    <aside id="axelDialogPreview" class="axel-dialog-preview" hidden aria-label="Pré-visualização do modelo">
+      <div class="axel-dialog-preview-title">Pré-visualizar como ficará no WhatsApp</div>
+      <div class="wa-screen"><div id="axelDialogPreviewBubble" class="wa-bubble"></div></div>
+      <p id="axelDialogPreviewFoot" class="axel-dialog-preview-foot"></p>
+    </aside>
+  </div>
   <input id="axelDialogInput" class="axel-dialog-input" aria-label="Nome do corpo" autocomplete="off" maxlength="200" hidden>
   <div class="axel-dialog-actions"><button type="button" id="axelDialogCancel">Voltar e conferir</button><button type="button" id="axelDialogAccept" class="axel-dialog-primary">Continuar</button></div>
 </dialog>
@@ -793,23 +815,23 @@ Clique abaixo para ver mais detalhes!</textarea>
 
     <details id="folderEndpointsDetails">
       <summary>Endpoints de pasta (avançado)</summary>
-      <div class="hint">Se der 404, abra o GHL → F12 → Network, crie uma pasta pela interface e copie a URL da requisição. Use <span class="tag">{location_id}</span> onde entra o ID.</div>
-      <label>Criar pasta — POST</label>
+      <div class="hint">Criar e listar são obrigatórios para usar pastas. Apagar e mover são opcionais e só precisam de URL se você quiser essas ações. Se der 404, abra o GHL → F12 → Network e copie a URL da requisição. Use <span class="tag">{location_id}</span> onde entra o ID.</div>
+      <label>Criar pasta — POST (obrigatório)</label>
       <input id="folder_create_url" value="{{ creds.folder_create_url or '' }}">
-      <label>Listar pastas — GET</label>
+      <label>Listar pastas — GET (obrigatório)</label>
       <input id="folder_list_url" value="{{ creds.folder_list_url or '' }}">
-      <label>Apagar pasta — DELETE</label>
+      <label>Apagar pasta — DELETE (opcional)</label>
       <input id="folder_delete_url" value="{{ creds.folder_delete_url or '' }}">
       <label>Campo do nome no corpo (JSON)</label>
       <input id="folder_name_key" value="{{ creds.folder_name_key or 'name' }}">
       <label>Campo da pasta no payload do modelo</label>
       <input id="template_folder_key" value="{{ creds.template_folder_key or 'folderId' }}">
       <div class="hint" style="margin-top:6px;">Mover modelo para pasta: se der 404/400, mova um modelo pela interface do GHL com o F12 aberto e copie método, URL e corpo da requisição. Coringas: <span class="tag">{location_id}</span> <span class="tag">{template_id}</span> <span class="tag">{template_name}</span> <span class="tag">{folder_id}</span></div>
-      <label>Mover modelo — método</label>
+      <label>Mover modelo — método (opcional)</label>
       <select id="move_method">
         {% for m in ['PUT', 'PATCH', 'POST'] %}<option value="{{ m }}" {% if (creds.move_method or default_move_method) == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
       </select>
-      <label>Mover modelo — URL</label>
+      <label>Mover modelo — URL (opcional)</label>
       <input id="move_url" value="{{ creds.move_url or default_move_url }}">
       <label>Mover modelo — corpo JSON (opcional)</label>
       <textarea id="move_body" style="min-height:50px;font-family:var(--mono);font-size:12px;" placeholder='Vazio = {"folderId": "{folder_id}"} (usa o campo acima)'>{{ creds.move_body or '' }}</textarea>
@@ -931,6 +953,9 @@ function showAxelDialog(options){
     const details = document.getElementById('axelDialogDetails');
     const warning = document.getElementById('axelDialogWarning');
     const note = document.getElementById('axelDialogNote');
+    const preview = document.getElementById('axelDialogPreview');
+    const previewBubble = document.getElementById('axelDialogPreviewBubble');
+    const previewFoot = document.getElementById('axelDialogPreviewFoot');
     document.getElementById('axelDialogTitle').textContent = options.title || 'Só um instante.';
     document.getElementById('axelDialogMessage').textContent = axelDialogText(options.message);
     document.getElementById('axelDialogEyebrow').textContent = options.kind === 'alert' ? 'AXEL · AVISO' : 'AXEL · CONFIRMAÇÃO';
@@ -956,6 +981,10 @@ function showAxelDialog(options){
     warning.hidden = !options.warning;
     note.textContent = options.note || '';
     note.hidden = !options.note;
+    dialog.classList.toggle('axel-dialog-review', !!options.preview);
+    preview.hidden = !options.preview;
+    previewBubble.innerHTML = options.preview ? (document.getElementById('waBubble').innerHTML || '') : '';
+    previewFoot.textContent = options.preview ? (document.getElementById('waFoot').textContent || '') : '';
     let settled = false;
     function finish(accepted){
       if(settled) return;
@@ -998,6 +1027,7 @@ function showAxelDialog(options){
     dialog.showModal();
     if(options.kind === 'prompt'){ input.focus(); input.select(); }
     else (options.kind === 'alert' ? accept : cancel).focus();
+    if(options.preview) dialog.scrollTop = 0;
   }));
   axelDialogQueue = result.catch(() => {});
   return result;
@@ -1723,6 +1753,8 @@ document.getElementById('moveSelectedBtn').addEventListener('click', async funct
   }
   const issue = folderContextIssue();
   if(issue){ await axelAlert(issue); openFolderEndpoints(); return; }
+  const cfg = getFolderConfig();
+  if(!cfg.move_url.trim()){ await axelAlert('O endpoint para mover modelos é opcional. Configure a URL em Pastas → Endpoints (avançado) para usar esta ação.'); openFolderEndpoints(); return; }
   const folderId = document.getElementById('moveFolderSelect').value;
   if(!folderId){
     await axelAlert('Escolha a pasta de destino (clique em "Atualizar pastas" se a lista estiver vazia).');
@@ -1738,7 +1770,6 @@ document.getElementById('moveSelectedBtn').addEventListener('click', async funct
   if(!confirmed) return;
 
   const creds = getCredsFromForm();
-  const cfg = getFolderConfig();
   moveStopFlag = false;
 
   const log = document.getElementById('deleteLog');
@@ -1857,9 +1888,9 @@ let folderConfigLocation = '';
 
 // Folder settings belong to the exact Location ID currently being edited.
 function folderConfigIssue(cfg, locationId){
-  const keys = ['folder_create_url', 'folder_list_url', 'folder_delete_url'];
-  if(keys.some(key => !String(cfg[key] || '').trim())) return 'Faltam os endpoints de criar, listar e apagar pastas desta subconta.';
-  for(const key of keys.concat(['move_url'])){
+  const required = ['folder_create_url', 'folder_list_url'];
+  if(required.some(key => !String(cfg[key] || '').trim())) return 'Faltam os endpoints obrigatórios de criar e listar pastas desta subconta.';
+  for(const key of required.concat(['folder_delete_url', 'move_url'])){
     const value = String(cfg[key] || '').trim();
     if(!value) continue;
     let url;
@@ -1967,10 +1998,15 @@ async function confirmCompanyForSubaccount(base, qty, varInfo){
     if(varInfo && varInfo.mismatch) warnings.push(varInfo.text);
     const phrases = [
       {title:'Calma aí, patrão.', message:'Confira se a subconta e o nome dos modelos estão certos antes de criar.'},
-      {title:'Calma aí, chefia.', message:'Tá muito apressado? Confira a subconta e o nome dos modelos antes de criar.'}
+      {title:'Calma aí, chefia.', message:'Tá muito apressado? Confira a subconta e o nome dos modelos antes de criar.'},
+      {title:'Tá viajando, é?', message:'Olha direito a subconta e o nome dos modelos antes de confirmar.'},
+      {title:'Ôxe, meu rei!', message:'Confira os dados direitinho antes de soltar esses modelos.'},
+      {title:'Segura aí, minha consagrada.', message:'Veja se a empresa e a subconta batem certinho antes de criar.'},
+      {title:'Oxente, não vá no embalo!', message:'Confirme o destino e os nomes dos modelos com calma.'}
     ];
     const phrase = phrases[Math.floor(Math.random() * phrases.length)];
     const pattern = 'vN_' + templatePart(base.base_name) + '_' + templatePart(base.date_suffix);
+    renderPreview(true);
     return await axelConfirm(phrase.message, {
       title:phrase.title,
       details:[
@@ -1982,6 +2018,7 @@ async function confirmCompanyForSubaccount(base, qty, varInfo){
       ],
       warning:warnings.join('\\n\\n'),
       note:'N será o próximo número livre na subconta.',
+      preview:true,
       acceptLabel:warnings.length ? 'Criar mesmo assim' : (qty === 1 ? 'Criar modelo' : 'Criar modelos'),
       cancelLabel:'Voltar e conferir'
     });
@@ -2030,7 +2067,7 @@ function fillFolderConfig(s){
   document.getElementById('template_folder_key').value = tfk;
   document.getElementById('template_folder_key_hidden').value = tfk;
   document.getElementById('move_method').value = s.move_method || DEFAULT_MOVE_METHOD;
-  document.getElementById('move_url').value = s.move_url || DEFAULT_MOVE_URL;
+  document.getElementById('move_url').value = s.move_url === undefined ? DEFAULT_MOVE_URL : (s.move_url || '');
   document.getElementById('move_body').value = s.move_body || '';
 }
 
@@ -2140,7 +2177,7 @@ async function initSubaccounts(){
     return;
   }
   const loc = document.getElementById('location_id').value.trim();
-  let pick = SUBACCOUNTS.find(s => s.key === data.active && (!loc || s.location_id === loc));
+  let pick = SUBACCOUNTS.find(s => s.key === data.active);
   if(!pick && loc) pick = SUBACCOUNTS.find(s => s.location_id === loc);
   if(pick) await applySubaccount(pick.key, { persist: false });
   if(data.recovered && data.recovered.length){
@@ -2252,6 +2289,8 @@ async function deleteFolder(id, name, row){
   if(contextVersion !== folderContextVersion) return;
   const issue = folderContextIssue();
   if(issue){ await axelAlert(issue); return; }
+  const cfg = getFolderConfig();
+  if(!cfg.folder_delete_url.trim()){ await axelAlert('O endpoint para apagar pastas é opcional. Configure a URL em Pastas → Endpoints (avançado) para habilitar esta ação.'); openFolderEndpoints(); return; }
   const creds = getCredsFromForm();
   const btn = row.querySelector('button[data-del]');
   if(btn){ btn.disabled = true; btn.textContent = 'Apagando...'; }
@@ -2260,7 +2299,7 @@ async function deleteFolder(id, name, row){
     const res = await fetch('/api/delete-folder', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(Object.assign({}, creds, getFolderConfig(), { folder_id: id, name }))
+      body: JSON.stringify(Object.assign({}, creds, cfg, { folder_id: id, name }))
     });
     data = await res.json();
   }catch(err){
@@ -4140,13 +4179,13 @@ def folder_configuration_error(error):
 
 
 def folder_config_issue(cfg, location_id, subaccounts):
-    required = ('folder_create_url', 'folder_list_url', 'folder_delete_url')
+    required = ('folder_create_url', 'folder_list_url')
     if not location_id:
         return 'Preencha o Location ID da subconta.'
     if any(not str(cfg.get(key) or '').strip() for key in required):
-        return 'Faltam os endpoints de criar, listar e apagar pastas desta subconta. Preencha e clique em Salvar endpoints.'
+        return 'Faltam os endpoints obrigatórios de criar e listar pastas desta subconta. Preencha e clique em Salvar endpoints.'
     foreign_ids = {str(s.get('location_id') or '').strip() for s in subaccounts.values() if isinstance(s, dict)} - {'', location_id}
-    for key in (*required, 'move_url'):
+    for key in (*required, 'folder_delete_url', 'move_url'):
         value = str(cfg.get(key) or '').strip()
         if not value:
             continue
@@ -4174,7 +4213,7 @@ def folder_config_from_request(data):
         'folder_delete_url': str(data.get('folder_delete_url') or '').strip(),
         'folder_name_key': str(data.get('folder_name_key') or 'name').strip(),
         'template_folder_key': str(data.get('template_folder_key') or 'folderId').strip(),
-        'move_url': str(data.get('move_url') or DEFAULT_MOVE_URL).strip(),
+        'move_url': str(data.get('move_url') or '').strip(),
         'move_method': normalize_move_method(data.get('move_method')),
         'move_body': str(data.get('move_body') or '').strip(),
     }
@@ -4187,6 +4226,16 @@ def folder_config_from_request(data):
     if issue:
         raise FolderConfigurationError(issue)
     return cfg
+
+
+def save_folder_request_creds(creds, cfg):
+    # A delayed request must not replace the newer selected account's settings.
+    with _STORE_LOCK:
+        current = load_creds()
+        selected = load_subaccounts().get(current.get('last_subaccount'))
+        if isinstance(selected, dict) and selected.get('location_id') != creds.get('location_id'):
+            return
+        save_creds({**creds, **cfg})
 
 
 def normalize_move_method(method):
@@ -4280,7 +4329,7 @@ def api_create_folder():
     data = request.get_json(force=True)
     creds = creds_from_request(data)
     cfg = folder_config_from_request(data)
-    save_creds({**creds, **cfg})
+    save_folder_request_creds(creds, cfg)
 
     name = (data.get("name") or "").strip()
     if not name:
@@ -4329,6 +4378,9 @@ def delete_one_folder(creds, cfg, folder_id, name=""):
     Se o GHL responder 404, capture a URL real no DevTools (apagando uma pasta
     pela interface) e ajuste em 'Pastas → Endpoints (avançado) → Apagar pasta'."""
     location_id = creds["location_id"].strip()
+    if not str(cfg.get("folder_delete_url") or "").strip():
+        return {"id": folder_id, "name": name, "ok": False,
+                "msg": "Endpoint para apagar pastas é opcional e não está configurado.", "detail": ""}
     base_url = fill_location(cfg["folder_delete_url"], location_id)
     url = base_url.rstrip("/") + f"/{folder_id}"
     headers = build_auth_headers(creds)
@@ -4356,12 +4408,14 @@ def api_delete_folder():
     data = request.get_json(force=True)
     creds = creds_from_request(data)
     cfg = folder_config_from_request(data)
-    save_creds({**creds, **cfg})
+    save_folder_request_creds(creds, cfg)
 
     folder_id = (data.get("folder_id") or data.get("id") or "").strip()
     name = (data.get("name") or "").strip()
     if not folder_id:
         return jsonify({"ok": False, "msg": "id da pasta vazio", "detail": ""})
+    if not cfg.get("folder_delete_url"):
+        return jsonify({"ok": False, "msg": "Endpoint para apagar pastas é opcional e não está configurado.", "detail": ""}), 400
 
     result = delete_one_folder(creds, cfg, folder_id, name)
     return jsonify(result)
@@ -4374,6 +4428,9 @@ def move_one_template(creds, cfg, template_id, name, folder_id):
     location_id = creds["location_id"].strip()
     name = name or ""
 
+    if not str(cfg.get("move_url") or "").strip():
+        return {"id": template_id, "name": name, "ok": False,
+                "msg": "Endpoint para mover modelos é opcional e não está configurado.", "detail": ""}
     url = cfg["move_url"]
     for key, val in (("{location_id}", location_id), ("{template_id}", str(template_id)),
                      ("{template_name}", name), ("{folder_id}", folder_id)):
@@ -4424,13 +4481,16 @@ def api_move_template():
     data = request.get_json(force=True)
     creds = creds_from_request(data)
     cfg = folder_config_from_request(data)
-    save_creds({**creds, **cfg})
+    save_folder_request_creds(creds, cfg)
 
     template_id = str(data.get("id") or "").strip()
     name = (data.get("name") or "").strip()
     folder_id = str(data.get("folder_id") or "").strip()
     if not template_id:
         return jsonify({"id": template_id, "name": name, "ok": False, "msg": "id do modelo ausente", "detail": ""})
+    if not cfg.get("move_url"):
+        return jsonify({"id": template_id, "name": name, "ok": False,
+                        "msg": "Endpoint para mover modelos é opcional e não está configurado.", "detail": ""})
     if not folder_id:
         return jsonify({"id": template_id, "name": name, "ok": False, "msg": "pasta de destino não escolhida", "detail": ""})
 
@@ -4442,7 +4502,7 @@ def api_list_folders():
     data = request.get_json(force=True)
     creds = creds_from_request(data)
     cfg = folder_config_from_request(data)
-    save_creds({**creds, **cfg})
+    save_folder_request_creds(creds, cfg)
 
     url = fill_location(cfg["folder_list_url"], creds["location_id"])
     try:
@@ -4552,7 +4612,7 @@ def api_save_subaccount():
         entry = dict(previous) if same_location else {
             'folder_create_url': '', 'folder_list_url': '', 'folder_delete_url': '',
             'folder_name_key': 'name', 'template_folder_key': 'folderId',
-            'move_url': DEFAULT_MOVE_URL, 'move_method': DEFAULT_MOVE_METHOD, 'move_body': '',
+            'move_url': '', 'move_method': DEFAULT_MOVE_METHOD, 'move_body': '',
             'folder_endpoints_configured': False,
         }
         entry.update(label=label, location_id=location_id)
@@ -4560,7 +4620,6 @@ def api_save_subaccount():
             cfg = {name: str(data.get(name) or '').strip() for name in ('folder_create_url', 'folder_list_url', 'folder_delete_url', 'folder_name_key', 'template_folder_key', 'move_url', 'move_body')}
             cfg['folder_name_key'] = cfg['folder_name_key'] or 'name'
             cfg['template_folder_key'] = cfg['template_folder_key'] or 'folderId'
-            cfg['move_url'] = cfg['move_url'] or DEFAULT_MOVE_URL
             cfg['move_method'] = normalize_move_method(data.get('move_method'))
             issue = folder_config_issue(cfg, location_id, subs)
             if issue:

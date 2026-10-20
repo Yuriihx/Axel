@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
@@ -121,6 +121,16 @@ class FolderIsolationTests(unittest.TestCase):
         self.assertEqual(creds['last_subaccount'], 'nova')
         self.assertEqual(creds['location_id'], 'new-location')
         self.assertEqual(creds['folder_list_url'], '')
+
+    def test_old_folder_request_cannot_overwrite_current_selection(self):
+        self.save(label='Nova', location_id='new-location')
+        before = self.module.load_creds()
+        response_stub = Mock(ok=True)
+        response_stub.json.return_value = {'folders': []}
+        with patch.object(self.module.requests, 'get', return_value=response_stub):
+            response = self.client.post('/api/list-folders', json={'location_id': 'old-location', 'auth_token': 'demo', 'token_id': 'demo-id', **self.config('old-location')})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.module.load_creds(), before)
 
 
 if __name__ == '__main__':
