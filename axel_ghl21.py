@@ -11,7 +11,7 @@ import base64
 import time
 import unicodedata
 from datetime import datetime
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, parse_qsl, unquote
 from flask import Flask, request, render_template_string, jsonify
 
 import requests
@@ -791,15 +791,15 @@ Clique abaixo para ver mais detalhes!</textarea>
       <button class="btn ghost" type="button" id="loadFoldersBtn" style="width:auto;">Buscar pastas</button>
     </div>
 
-    <details>
+    <details id="folderEndpointsDetails">
       <summary>Endpoints de pasta (avançado)</summary>
       <div class="hint">Se der 404, abra o GHL → F12 → Network, crie uma pasta pela interface e copie a URL da requisição. Use <span class="tag">{location_id}</span> onde entra o ID.</div>
       <label>Criar pasta — POST</label>
-      <input id="folder_create_url" value="{{ creds.folder_create_url or default_folder_url }}">
+      <input id="folder_create_url" value="{{ creds.folder_create_url or '' }}">
       <label>Listar pastas — GET</label>
-      <input id="folder_list_url" value="{{ creds.folder_list_url or default_folder_url }}">
+      <input id="folder_list_url" value="{{ creds.folder_list_url or '' }}">
       <label>Apagar pasta — DELETE</label>
-      <input id="folder_delete_url" value="{{ creds.folder_delete_url or default_folder_url }}">
+      <input id="folder_delete_url" value="{{ creds.folder_delete_url or '' }}">
       <label>Campo do nome no corpo (JSON)</label>
       <input id="folder_name_key" value="{{ creds.folder_name_key or 'name' }}">
       <label>Campo da pasta no payload do modelo</label>
@@ -1704,27 +1704,7 @@ function renderMoveFolderOptions(){
 }
 
 async function refreshMoveFolders(silent){
-  const creds = getCredsFromForm();
-  if(!creds.location_id){
-    if(!silent) await axelAlert('Preencha o Location ID e as credenciais primeiro.');
-    return;
-  }
-  try{
-    const res = await fetch('/api/list-folders', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(Object.assign({}, creds, getFolderConfig()))
-    });
-    const data = await res.json();
-    if(data.ok){
-      FOLDERS = data.folders || [];
-    }else if(!silent){
-      await axelAlert('Não foi possível buscar as pastas: ' + (data.error || 'erro desconhecido'));
-    }
-  }catch(err){
-    if(!silent) await axelAlert('Erro ao buscar pastas: ' + err.message);
-  }
-  renderMoveFolderOptions();
+  return await loadFolders({silent:!!silent});
 }
 
 document.getElementById('refreshMoveFoldersBtn').addEventListener('click', async function(){
@@ -1741,6 +1721,8 @@ document.getElementById('moveSelectedBtn').addEventListener('click', async funct
     await axelAlert('Selecione ao menos um modelo pra mover.');
     return;
   }
+  const issue = folderContextIssue();
+  if(issue){ await axelAlert(issue); openFolderEndpoints(); return; }
   const folderId = document.getElementById('moveFolderSelect').value;
   if(!folderId){
     await axelAlert('Escolha a pasta de destino (clique em "Atualizar pastas" se a lista estiver vazia).');
@@ -1848,6 +1830,7 @@ function updateProgressBar(fillId, labelId, done, total){
 // ---------- Pastas ----------
 
 function getFolderConfig(){
+  if(folderConfigLocation !== document.getElementById('location_id').value.trim()) return {folder_create_url:'', folder_list_url:'', folder_delete_url:'', folder_name_key:'name', template_folder_key:'folderId', move_method:DEFAULT_MOVE_METHOD, move_url:DEFAULT_MOVE_URL, move_body:''};
   return {
     folder_create_url: document.getElementById('folder_create_url').value.trim(),
     folder_list_url: document.getElementById('folder_list_url').value.trim(),
@@ -1869,6 +1852,73 @@ function getFolderConfig(){
 let SUBACCOUNTS = [];
 let ACTIVE_SUB = '';
 let folderReqSeq = 0;
+let folderContextVersion = 0;
+let folderConfigLocation = '';
+
+// Folder settings belong to the exact Location ID currently being edited.
+function folderConfigIssue(cfg, locationId){
+  const keys = ['folder_create_url', 'folder_list_url', 'folder_delete_url'];
+  if(keys.some(key => !String(cfg[key] || '').trim())) return 'Faltam os endpoints de criar, listar e apagar pastas desta subconta.';
+  for(const key of keys.concat(['move_url'])){
+    const value = String(cfg[key] || '').trim();
+    if(!value) continue;
+    let url;
+    try{ url = new URL(value.replaceAll('{location_id}', encodeURIComponent(locationId))); }
+    catch(err){ return 'Confira os endpoints: cada URL precisa ser completa e válida.'; }
+    if(!['https:', 'http:'].includes(url.protocol)) return 'Use endpoints HTTP ou HTTPS válidos.';
+    const parts = url.pathname.split('/').map(part => decodeURIComponent(part));
+    const queries = Array.from(url.searchParams.entries());
+    for(let i = 0; i < parts.length - 1; i++){
+      if(['locations', 'location'].includes(parts[i].toLowerCase()) && parts[i + 1] !== locationId) return 'Um endpoint pertence a outro Location ID. Use o endereço desta subconta ou {location_id}.';
+    }
+    if(queries.some(([name, value]) => ['locationid', 'location_id', 'altid'].includes(name.toLowerCase()) && value !== locationId)) return 'Um endpoint pertence a outro Location ID. Confira a configuração.';
+    if(SUBACCOUNTS.some(s => s.location_id && s.location_id !== locationId && (parts.includes(s.location_id) || queries.some(([, value]) => value === s.location_id)))) return 'Os endpoints ainda apontam para outra subconta. Cole os endpoints corretos antes de salvar.';
+  }
+  return '';
+}
+
+function folderContextIssue(){
+  const locationId = document.getElementById('location_id').value.trim();
+  if(!locationId) return 'Preencha o Location ID antes de configurar as pastas.';
+  const sub = activeSub();
+  if(folderConfigLocation !== locationId || (sub && sub.location_id !== locationId)) return 'A configuração de pastas não pertence ao Location ID atual.';
+  if(sub && sub.folder_endpoints_configured === false) return 'Faltam os endpoints de pastas da subconta "' + sub.label + '". Preencha a seção abaixo e clique em "Salvar endpoints".';
+  return folderConfigIssue(getFolderConfig(), locationId);
+}
+
+function openFolderEndpoints(){
+  document.getElementById('folderEndpointsDetails').open = true;
+  const input = document.getElementById('folder_create_url');
+  input.scrollIntoView({behavior:'smooth', block:'center'});
+  input.focus({preventScroll:true});
+}
+
+function resetFolderState(){
+  folderReqSeq++;
+  folderContextVersion++;
+  clearTimeout(folderSyncTimer);
+  document.getElementById('folder_id').value = '';
+  document.getElementById('folderChosenName').textContent = '';
+  document.getElementById('folderList').innerHTML = '';
+  document.getElementById('folderLog').innerHTML = '';
+  FOLDERS = [];
+  renderMoveFolderOptions();
+  document.getElementById('moveFolderSelect').value = '';
+}
+
+function detachFolderContext(){
+  const locationId = document.getElementById('location_id').value.trim();
+  const sub = activeSub();
+  if(folderConfigLocation === locationId && (!sub || sub.location_id === locationId)) return;
+  ACTIVE_SUB = '';
+  renderSubaccountSelects();
+  persistActiveSub('');
+  resetSubaccountScopedUI();
+  fillFolderConfig({location_id:locationId});
+  setFolderSyncLog('Nova subconta: configure e salve os endpoints de pastas antes de buscar ou criar pastas.', 'err');
+  setSubaccountLog('Location ID diferente das subcontas salvas — dê um nome e salve o cadastro.');
+}
+
 let folderSyncTimer = null;
 
 function subKeyOf(label){
@@ -1970,9 +2020,11 @@ function renderSubaccountSelects(){
 }
 
 function fillFolderConfig(s){
-  document.getElementById('folder_create_url').value = s.folder_create_url || DEFAULT_FOLDER_URL;
-  document.getElementById('folder_list_url').value = s.folder_list_url || DEFAULT_FOLDER_URL;
-  document.getElementById('folder_delete_url').value = s.folder_delete_url || DEFAULT_FOLDER_URL;
+  s = s || {};
+  folderConfigLocation = String(s.location_id || '').trim();
+  document.getElementById('folder_create_url').value = s.folder_create_url || '';
+  document.getElementById('folder_list_url').value = s.folder_list_url || '';
+  document.getElementById('folder_delete_url').value = s.folder_delete_url || '';
   document.getElementById('folder_name_key').value = s.folder_name_key || 'name';
   const tfk = s.template_folder_key || 'folderId';
   document.getElementById('template_folder_key').value = tfk;
@@ -1985,12 +2037,7 @@ function fillFolderConfig(s){
 // Troca de sub-conta: limpa o que era da sub-conta anterior pra não criar
 // modelo na pasta errada nem apagar/mover modelo com o Location ID trocado.
 function resetSubaccountScopedUI(){
-  document.getElementById('folder_id').value = '';
-  document.getElementById('folderChosenName').textContent = '';
-  document.getElementById('folderList').innerHTML = '';
-  document.getElementById('folderLog').innerHTML = '';
-  FOLDERS = [];
-  renderMoveFolderOptions();
+  resetFolderState();
   loadedTemplates = [];
   document.getElementById('templatesList').innerHTML = '';
   document.getElementById('deleteControls').style.display = 'none';
@@ -2014,6 +2061,8 @@ function hasSessionTokens(){
 async function syncFoldersForActive(){
   const s = activeSub();
   if(!s) return;
+  const issue = folderContextIssue();
+  if(issue){ setFolderSyncLog(issue, 'err'); return; }
   if(!hasSessionTokens()){
     setFolderSyncLog('Sub-conta "' + s.label + '" sincronizada. Cole o Authorization e o token-id para listar as pastas.');
     return;
@@ -2040,13 +2089,15 @@ function scheduleFolderSync(){
 async function applySubaccount(key, opts){
   opts = opts || {};
   const s = SUBACCOUNTS.find(x => x.key === key) || null;
-  const changed = (s ? s.key : '') !== ACTIVE_SUB;
+  const changed = (s ? s.key : '') !== ACTIVE_SUB || folderConfigLocation !== String(s ? s.location_id : document.getElementById('location_id').value).trim();
+  if(changed){ resetSubaccountScopedUI(); resetMediaChoice(); }
   ACTIVE_SUB = s ? s.key : '';
   renderSubaccountSelects();
   if(opts.persist !== false) persistActiveSub(ACTIVE_SUB);
   if(!s){
+    fillFolderConfig({location_id:document.getElementById('location_id').value.trim()});
     setSubaccountLog('');
-    setFolderSyncLog('');
+    setFolderSyncLog('Configure os endpoints de pastas desta subconta antes de continuar.');
     return;
   }
   document.getElementById('location_id').value = s.location_id || '';
@@ -2057,13 +2108,12 @@ async function applySubaccount(key, opts){
     baseInput.value = s.label || '';
     baseInput.dispatchEvent(new Event('input', { bubbles: true }));
   }
-  if(changed) resetMediaChoice();
-  // na parte de Pastas: procura a sub-conta salva com o mesmo nome e puxa os endpoints dela
-  fillFolderConfig(findSubaccountByName(s.label) || s);
-  if(changed) resetSubaccountScopedUI();
+  fillFolderConfig(s);
   setSubaccountLog('Sub-conta "' + s.label + '" carregada — agora é só colar o Authorization e o token-id.', 'ok');
   if(typeof checkTokensSoon === 'function') checkTokensSoon(0);
-  if(opts.fetchFolders !== false) await syncFoldersForActive();
+  const folderIssue = folderContextIssue();
+  if(folderIssue) setFolderSyncLog(folderIssue, 'err');
+  else if(opts.fetchFolders !== false) await syncFoldersForActive();
 }
 
 async function loadSubaccounts(){
@@ -2102,21 +2152,13 @@ async function initSubaccounts(){
   document.getElementById(id).addEventListener('change', function(){ applySubaccount(this.value); });
 });
 
-// Digitou/colou um Location ID na mão: se for de uma sub-conta salva, seleciona ela.
+// Invalidate folder state as soon as the destination changes, before blur or save.
+document.getElementById('location_id').addEventListener('input', detachFolderContext);
 document.getElementById('location_id').addEventListener('change', function(){
   const loc = this.value.trim();
-  const cur = activeSub();
-  if(cur && cur.location_id === loc) return;
-  const match = loc ? SUBACCOUNTS.find(s => s.location_id === loc) : null;
+  const match = SUBACCOUNTS.find(s => s.location_id === loc);
   if(match){ applySubaccount(match.key); return; }
-  if(cur){
-    ACTIVE_SUB = '';
-    renderSubaccountSelects();
-    persistActiveSub('');
-    resetSubaccountScopedUI();
-    setFolderSyncLog('');
-    setSubaccountLog('Location ID diferente das sub-contas salvas — dê um nome e clique em "Salvar sub-conta" para guardar.');
-  }
+  detachFolderContext();
 });
 
 document.getElementById('saveSubaccountBtn').addEventListener('click', async function(){
@@ -2129,45 +2171,48 @@ document.getElementById('saveSubaccountBtn').addEventListener('click', async fun
   if(!key){ await axelAlert('Nome inválido — use letras ou números.'); return; }
   const existing = SUBACCOUNTS.find(s => s.key === key);
   if(existing && existing.location_id && existing.location_id !== location_id &&
-     !await axelConfirm('Já existe a sub-conta "' + existing.label + '" com outro Location ID (' + existing.location_id + ').\\n\\nSubstituir pelo Location ID atual?')){
-    return;
-  }
-
+     !await axelConfirm('Já existe a subconta "' + existing.label + '" com outro Location ID. Substituir pelo Location ID atual?')) return;
   const btn = this;
   btn.disabled = true; btn.textContent = 'Salvando...';
-  const data = await postJSON('/api/save-subaccount', Object.assign({ label, location_id }, getFolderConfig()));
+  // Saving a name is never permission to copy another account's endpoints.
+  const data = await postJSON('/api/save-subaccount', {label, location_id});
   btn.disabled = false; btn.textContent = 'Salvar sub-conta';
-
-  if(data.ok){
-    const wasActive = ACTIVE_SUB;
-    await loadSubaccounts();
-    ACTIVE_SUB = data.key;
-    renderSubaccountSelects();
-    setSubaccountLog(data.msg + ' ✓', 'ok');
-    if(wasActive !== data.key) syncFoldersForActive();
-  }else{
-    setSubaccountLog(data.msg || 'falha ao salvar', 'err');
-  }
+  if(!data.ok){ setSubaccountLog(data.msg || 'falha ao salvar', 'err'); return; }
+  await loadSubaccounts();
+  if(document.getElementById('location_id').value.trim() !== location_id || nameInput.value.trim() !== label) return;
+  await applySubaccount(data.key, {persist:false, fetchFolders:false});
+  setSubaccountLog(data.msg + ' ✓', 'ok');
+  const issue = folderContextIssue();
+  if(issue){
+    setFolderSyncLog(issue, 'err');
+    const configure = await showAxelDialog({kind:'alert', title:'Faltam os endpoints de pastas.', message:'Calma aí, chefia: a subconta "' + label + '" foi salva, mas os endpoints de pastas ainda precisam ser configurados. Cole os endpoints desta subconta e clique em "Salvar endpoints".', acceptLabel:'Configurar endpoints'});
+    if(configure && ACTIVE_SUB === data.key) openFolderEndpoints();
+  }else await syncFoldersForActive();
 });
+
 
 document.getElementById('saveFolderEndpointsBtn').addEventListener('click', async function(){
   const s = activeSub();
-  if(!s){ await axelAlert('Selecione (ou salve) uma sub-conta nas Credenciais primeiro.'); return; }
+  if(!s){ await axelAlert('Selecione ou salve a subconta nas Credenciais primeiro.'); return; }
+  const locationId = document.getElementById('location_id').value.trim();
+  const cfg = getFolderConfig();
+  const issue = s.location_id !== locationId || folderConfigLocation !== locationId
+    ? 'Selecione novamente a subconta para configurar os endpoints corretos.' : folderConfigIssue(cfg, locationId);
+  if(issue){ await axelAlert(issue); openFolderEndpoints(); return; }
   const btn = this;
   btn.disabled = true; btn.textContent = 'Salvando...';
-  const data = await postJSON('/api/save-subaccount', Object.assign(
-    { label: s.label, location_id: s.location_id || document.getElementById('location_id').value.trim() },
-    getFolderConfig()));
+  const data = await postJSON('/api/save-subaccount', Object.assign({label:s.label, location_id:locationId, save_endpoints:true}, cfg));
   btn.disabled = false; btn.textContent = 'Salvar endpoints';
-  if(data.ok){
-    await loadSubaccounts();
-    ACTIVE_SUB = data.key;
-    renderSubaccountSelects();
-    setFolderSyncLog('Endpoints de pasta salvos em "' + s.label + '" ✓', 'ok');
-  }else{
-    setFolderSyncLog(data.msg || 'falha ao salvar', 'err');
-  }
+  if(!data.ok){ setFolderSyncLog(data.msg || 'falha ao salvar', 'err'); await axelAlert(data.msg || 'Não foi possível salvar os endpoints.'); return; }
+  const stillHere = ACTIVE_SUB === s.key && document.getElementById('location_id').value.trim() === locationId;
+  await loadSubaccounts();
+  if(!stillHere || ACTIVE_SUB !== s.key || document.getElementById('location_id').value.trim() !== locationId) return;
+  resetFolderState();
+  fillFolderConfig(data.subaccount);
+  setFolderSyncLog('Endpoints de pasta salvos em "' + s.label + '" ✓', 'ok');
+  if(hasSessionTokens()) await syncFoldersForActive();
 });
+
 
 document.getElementById('deleteSubaccountBtn').addEventListener('click', async function(){
   const s = activeSub();
@@ -2202,7 +2247,11 @@ async function postJSON(url, body){
 }
 
 async function deleteFolder(id, name, row){
+  const contextVersion = folderContextVersion;
   if(!await axelConfirm(`Apagar a pasta "${name}"? Essa ação não pode ser desfeita.`)) return;
+  if(contextVersion !== folderContextVersion) return;
+  const issue = folderContextIssue();
+  if(issue){ await axelAlert(issue); return; }
   const creds = getCredsFromForm();
   const btn = row.querySelector('button[data-del]');
   if(btn){ btn.disabled = true; btn.textContent = 'Apagando...'; }
@@ -2217,6 +2266,7 @@ async function deleteFolder(id, name, row){
   }catch(err){
     data = { ok: false, msg: 'erro de rede local', detail: err.message };
   }
+  if(contextVersion !== folderContextVersion) return;
   if(data.ok){
     row.remove();
     FOLDERS = FOLDERS.filter(f => String(f.id) !== String(id));
@@ -2270,6 +2320,9 @@ document.getElementById('createFoldersBtn').addEventListener('click', async func
   const creds = getCredsFromForm();
   if(!creds.location_id){ await axelAlert('Preencha o Location ID e as credenciais primeiro.'); return; }
 
+  const issue = folderContextIssue();
+  if(issue){ await axelAlert(issue); openFolderEndpoints(); return; }
+  const contextVersion = folderContextVersion;
   const names = document.getElementById('folderNames').value
     .split(/[\\n,]+/).map(n => n.trim()).filter(Boolean);
   if(names.length === 0){ await axelAlert('Digite ao menos um nome de pasta.'); return; }
@@ -2298,6 +2351,7 @@ document.getElementById('createFoldersBtn').addEventListener('click', async func
       data = { ok: false, msg: 'erro de rede local', detail: err.message };
     }
 
+    if(contextVersion !== folderContextVersion || creds.location_id !== document.getElementById('location_id').value.trim()) break;
     row.querySelector('.dot').className = 'dot ' + (data.ok ? 'ok' : 'fail');
     row.querySelector('.log-msg').textContent = data.ok
       ? (data.id ? 'criada · ' + data.id : 'criada (id não veio na resposta)')
@@ -2317,8 +2371,10 @@ document.getElementById('createFoldersBtn').addEventListener('click', async func
   }
 
   // Se criou só uma pasta, já preenche o folderId automaticamente
-  if(names.length === 1 && lastId) useFolder(lastId, names[0]);
-  refreshMoveFolders(true);
+  if(contextVersion === folderContextVersion){
+    if(names.length === 1 && lastId) useFolder(lastId, names[0]);
+    refreshMoveFolders(true);
+  }
 
   btn.disabled = false; btn.textContent = 'Criar pasta(s)';
 });
@@ -2330,7 +2386,15 @@ async function loadFolders(opts){
     if(!opts.silent) await axelAlert('Preencha o Location ID e as credenciais primeiro.');
     return { ok: false, error: 'Location ID vazio' };
   }
+  const issue = folderContextIssue();
+  if(issue){
+    resetFolderState(); setFolderSyncLog(issue, 'err');
+    if(!opts.silent){ await axelAlert(issue); openFolderEndpoints(); }
+    return {ok:false, error:issue, configuration_missing:true};
+  }
   const seq = ++folderReqSeq;
+  const requestKey = ACTIVE_SUB;
+  const contextVersion = folderContextVersion;
   const list = document.getElementById('folderList');
   list.innerHTML = '<div class="empty">Buscando pastas...</div>';
 
@@ -2345,7 +2409,7 @@ async function loadFolders(opts){
   }catch(err){
     data = { ok: false, folders: [], error: err.message };
   }
-  if(seq !== folderReqSeq) return { stale: true };  // já trocou de sub-conta no meio
+  if(seq !== folderReqSeq || contextVersion !== folderContextVersion || requestKey !== ACTIVE_SUB || creds.location_id !== document.getElementById('location_id').value.trim()) return { stale: true };  // já trocou de sub-conta no meio
 
   list.innerHTML = '';
   if(!data.ok){
@@ -4066,18 +4130,62 @@ def creds_from_request(data):
     return c
 
 
+class FolderConfigurationError(ValueError):
+    pass
+
+
+@app.errorhandler(FolderConfigurationError)
+def folder_configuration_error(error):
+    return jsonify(ok=False, msg=str(error), error=str(error), folders=[]), 400
+
+
+def folder_config_issue(cfg, location_id, subaccounts):
+    required = ('folder_create_url', 'folder_list_url', 'folder_delete_url')
+    if not location_id:
+        return 'Preencha o Location ID da subconta.'
+    if any(not str(cfg.get(key) or '').strip() for key in required):
+        return 'Faltam os endpoints de criar, listar e apagar pastas desta subconta. Preencha e clique em Salvar endpoints.'
+    foreign_ids = {str(s.get('location_id') or '').strip() for s in subaccounts.values() if isinstance(s, dict)} - {'', location_id}
+    for key in (*required, 'move_url'):
+        value = str(cfg.get(key) or '').strip()
+        if not value:
+            continue
+        try:
+            url = urlsplit(value.replace('{location_id}', quote(location_id, safe='')))
+            if url.scheme not in ('http', 'https') or not url.netloc:
+                return 'Confira os endpoints: cada URL precisa ser completa e válida.'
+            parts = [unquote(part) for part in url.path.split('/')]
+            queries = parse_qsl(url.query)
+        except ValueError:
+            return 'Endpoint de pastas inválido.'
+        if any(part.lower() in ('locations', 'location') and parts[i + 1] != location_id for i, part in enumerate(parts[:-1])):
+            return 'Um endpoint pertence a outro Location ID. Use o endereço desta subconta ou {location_id}.'
+        if any(name.lower() in ('locationid', 'location_id', 'altid') and val != location_id for name, val in queries):
+            return 'Um endpoint pertence a outro Location ID. Confira a configuração.'
+        if foreign_ids.intersection(parts) or foreign_ids.intersection(val for _, val in queries):
+            return 'Os endpoints apontam para outra subconta. Cole os endpoints corretos antes de salvar.'
+    return ''
+
+
 def folder_config_from_request(data):
-    """Lê a config de endpoints de pasta e salva junto com as credenciais."""
     cfg = {
-        "folder_create_url": (data.get("folder_create_url") or DEFAULT_FOLDER_ENDPOINT).strip(),
-        "folder_list_url": (data.get("folder_list_url") or DEFAULT_FOLDER_ENDPOINT).strip(),
-        "folder_delete_url": (data.get("folder_delete_url") or DEFAULT_FOLDER_ENDPOINT).strip(),
-        "folder_name_key": (data.get("folder_name_key") or "name").strip(),
-        "template_folder_key": (data.get("template_folder_key") or "folderId").strip(),
-        "move_url": (data.get("move_url") or DEFAULT_MOVE_URL).strip(),
-        "move_method": normalize_move_method(data.get("move_method")),
-        "move_body": (data.get("move_body") or "").strip(),
+        'folder_create_url': str(data.get('folder_create_url') or '').strip(),
+        'folder_list_url': str(data.get('folder_list_url') or '').strip(),
+        'folder_delete_url': str(data.get('folder_delete_url') or '').strip(),
+        'folder_name_key': str(data.get('folder_name_key') or 'name').strip(),
+        'template_folder_key': str(data.get('template_folder_key') or 'folderId').strip(),
+        'move_url': str(data.get('move_url') or DEFAULT_MOVE_URL).strip(),
+        'move_method': normalize_move_method(data.get('move_method')),
+        'move_body': str(data.get('move_body') or '').strip(),
     }
+    location_id = clean_location_id(data.get('location_id'))
+    subs = load_subaccounts()
+    saved = [s for s in subs.values() if isinstance(s, dict) and s.get('location_id') == location_id]
+    if saved and all(s.get('folder_endpoints_configured') is False for s in saved):
+        raise FolderConfigurationError('Faltam os endpoints de pastas desta subconta. Configure e clique em Salvar endpoints antes de continuar.')
+    issue = folder_config_issue(cfg, location_id, subs)
+    if issue:
+        raise FolderConfigurationError(issue)
     return cfg
 
 
@@ -4366,7 +4474,13 @@ def api_list_subaccounts():
 def api_set_active_subaccount():
     data = request.get_json(force=True)
     key = (data.get("key") or "").strip()
-    save_creds({"last_subaccount": key})
+    if key:
+        sub = load_subaccounts().get(key)
+        if not isinstance(sub, dict):
+            return jsonify(ok=False, msg='Subconta salva não encontrada.'), 400
+        save_creds(subaccount_selection_settings(key, sub))
+    else:
+        save_creds({'last_subaccount': ''})
     return jsonify({"ok": True, "key": key})
 
 
@@ -4416,41 +4530,50 @@ def api_presets_delete():
     return jsonify({"ok": True, "presets": presets, "msg": "opção apagada"})
 
 
-@app.route("/api/save-subaccount", methods=["POST"])
+def subaccount_selection_settings(key, entry):
+    fields = ('folder_create_url', 'folder_list_url', 'folder_delete_url', 'folder_name_key',
+              'template_folder_key', 'move_url', 'move_method', 'move_body')
+    return {'last_subaccount': key, 'location_id': entry.get('location_id', ''),
+            **{field: entry.get(field, '') for field in fields}}
+
+
+@app.route('/api/save-subaccount', methods=['POST'])
 def api_save_subaccount():
     data = request.get_json(force=True)
-    label = (data.get("label") or "").strip()
-    if not label:
-        return jsonify({"ok": False, "msg": "dê um nome pra sub-conta (ex: Polishop)"})
-
+    label = str(data.get('label') or '').strip()
+    location_id = clean_location_id(data.get('location_id'))
     key = subaccount_key(label)
-    if not key:
-        return jsonify({"ok": False, "msg": "nome inválido"})
-
-    entry = {
-        "label": label,
-        "location_id": clean_location_id(data.get("location_id")),
-        "folder_create_url": (data.get("folder_create_url") or DEFAULT_FOLDER_ENDPOINT).strip(),
-        "folder_list_url": (data.get("folder_list_url") or DEFAULT_FOLDER_ENDPOINT).strip(),
-        "folder_delete_url": (data.get("folder_delete_url") or DEFAULT_FOLDER_ENDPOINT).strip(),
-        "folder_name_key": (data.get("folder_name_key") or "name").strip(),
-        "template_folder_key": (data.get("template_folder_key") or "folderId").strip(),
-        "move_url": (data.get("move_url") or DEFAULT_MOVE_URL).strip(),
-        "move_method": normalize_move_method(data.get("move_method")),
-        "move_body": (data.get("move_body") or "").strip(),
-    }
+    if not key or not location_id:
+        return jsonify(ok=False, msg='Preencha um nome válido e o Location ID da subconta.'), 400
     with _STORE_LOCK:
         subs = load_subaccounts()
-        existed = key in subs
+        previous = subs.get(key)
+        same_location = isinstance(previous, dict) and previous.get('location_id') == location_id
+        entry = dict(previous) if same_location else {
+            'folder_create_url': '', 'folder_list_url': '', 'folder_delete_url': '',
+            'folder_name_key': 'name', 'template_folder_key': 'folderId',
+            'move_url': DEFAULT_MOVE_URL, 'move_method': DEFAULT_MOVE_METHOD, 'move_body': '',
+            'folder_endpoints_configured': False,
+        }
+        entry.update(label=label, location_id=location_id)
+        if data.get('save_endpoints') is True:
+            cfg = {name: str(data.get(name) or '').strip() for name in ('folder_create_url', 'folder_list_url', 'folder_delete_url', 'folder_name_key', 'template_folder_key', 'move_url', 'move_body')}
+            cfg['folder_name_key'] = cfg['folder_name_key'] or 'name'
+            cfg['template_folder_key'] = cfg['template_folder_key'] or 'folderId'
+            cfg['move_url'] = cfg['move_url'] or DEFAULT_MOVE_URL
+            cfg['move_method'] = normalize_move_method(data.get('move_method'))
+            issue = folder_config_issue(cfg, location_id, subs)
+            if issue:
+                return jsonify(ok=False, msg=issue), 400
+            entry.update(cfg, folder_endpoints_configured=True)
         subs[key] = entry
         try:
             save_subaccounts(subs)
-        except OSError as e:
-            return jsonify({"ok": False, "msg": f"não consegui gravar {SUBACCOUNTS_FILE}: {e}"})
-    save_creds({"last_subaccount": key})
-    verb = "atualizada" if existed else "salva"
-    return jsonify({"ok": True, "key": key, "subaccount": entry, "existed": existed,
-                    "msg": f'sub-conta "{label}" {verb}'})
+        except OSError as error:
+            return jsonify(ok=False, msg=f'Não foi possível salvar a subconta: {error}'), 500
+    save_creds(subaccount_selection_settings(key, entry))
+    return jsonify(ok=True, key=key, subaccount=entry, existed=previous is not None,
+                   msg=f'Subconta "{label}" salva', needs_folder_endpoints=entry.get('folder_endpoints_configured') is False)
 
 
 @app.route("/api/delete-subaccount", methods=["POST"])
