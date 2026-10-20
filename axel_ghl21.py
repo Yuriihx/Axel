@@ -434,9 +434,46 @@ PAGE = """
   @keyframes fadeIn{to{opacity:1;}}
   @keyframes splashAuto{to{opacity:0;visibility:hidden;}}
   @media (prefers-reduced-motion:reduce){.splash{display:none;}}
+  .axel-dialog{position:fixed;inset:0;margin:auto;width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);padding:28px;border:1px solid #34443e;border-radius:22px;background:linear-gradient(145deg,#192720,#101a16);color:#edf5f0;box-shadow:0 32px 100px #0009;font-family:var(--sans,system-ui,sans-serif);overflow:auto}
+  .axel-dialog::backdrop{background:#030a07ba;backdrop-filter:blur(6px)}
+  .axel-dialog[open]{animation:axelDialogIn .18s ease-out}
+  .axel-dialog-top{display:flex;align-items:center;gap:9px;margin-bottom:18px;color:#9cb1a6;font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase}
+  .axel-dialog-icon{display:grid;place-items:center;width:26px;height:26px;border:1px solid #536849;border-radius:50%;color:#d7e9a0;font-size:13px;letter-spacing:0}
+  .axel-dialog h2{margin:0 0 10px;font-size:25px;line-height:1.2;font-weight:650;letter-spacing:-.035em}
+  .axel-dialog-message{margin:0;color:#adbbb3;font-size:14px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
+  .axel-dialog-details{display:grid;gap:0;margin:20px 0 0;padding:4px 16px;border:1px solid #304139;border-radius:13px;background:#0b140f80}
+  .axel-dialog-details>div{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;padding:11px 0;border-bottom:1px solid #25372d}
+  .axel-dialog-details>div:last-child{border:0}
+  .axel-dialog-details dt{color:#8ca196;font-size:12px}
+  .axel-dialog-details dd{margin:0;color:#e8f1eb;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+  .axel-dialog-details dd[data-code]{font-family:var(--mono,monospace);font-size:11px}
+  .axel-dialog-warning{margin:16px 0 0;padding:12px 14px;border:1px solid #765a33;border-radius:11px;background:#614b221c;color:#e6c58d;font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+  .axel-dialog-note{margin:12px 0 0;color:#82998c;font-size:11px;line-height:1.5}
+  .axel-dialog-input{width:100%;box-sizing:border-box;margin-top:18px;padding:12px 14px;border:1px solid #405648;border-radius:10px;background:#0a130e;color:#edf5f0;font:14px system-ui,sans-serif}
+  .axel-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}
+  .axel-dialog-actions button{min-height:42px;padding:10px 17px;border:1px solid #3a4b40;border-radius:11px;background:transparent;color:#c1cfc6;font:600 13px system-ui,sans-serif;cursor:pointer}
+  .axel-dialog-actions button.axel-dialog-primary{border-color:#9ed2ac;background:#b5ddbc;color:#112719}
+  .axel-dialog-actions button.axel-dialog-danger{border-color:#a05050;background:#743434;color:#fff0f0}
+  .axel-dialog-actions button:hover{filter:brightness(1.12)}
+  .axel-dialog-actions button:focus-visible,.axel-dialog-input:focus-visible{outline:2px solid #a4d6b1;outline-offset:3px}
+  .axel-dialog [hidden]{display:none!important}
+  @keyframes axelDialogIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+  @media(max-width:480px){.axel-dialog{padding:23px;border-radius:18px}.axel-dialog h2{font-size:23px}.axel-dialog-details>div{grid-template-columns:80px minmax(0,1fr);gap:8px}.axel-dialog-actions button{flex:1;padding:10px}}
+  @media(prefers-reduced-motion:reduce){.axel-dialog[open]{animation:none}}
 </style>
 </head>
 <body>
+<dialog id="axelDialog" class="axel-dialog" aria-labelledby="axelDialogTitle" aria-describedby="axelDialogMessage">
+  <div class="axel-dialog-top"><span class="axel-dialog-icon" aria-hidden="true">!</span><span id="axelDialogEyebrow">AXEL · AVISO</span></div>
+  <h2 id="axelDialogTitle"></h2>
+  <p id="axelDialogMessage" class="axel-dialog-message"></p>
+  <dl id="axelDialogDetails" class="axel-dialog-details" hidden></dl>
+  <p id="axelDialogWarning" class="axel-dialog-warning" hidden></p>
+  <p id="axelDialogNote" class="axel-dialog-note" hidden></p>
+  <input id="axelDialogInput" class="axel-dialog-input" aria-label="Nome do corpo" autocomplete="off" maxlength="200" hidden>
+  <div class="axel-dialog-actions"><button type="button" id="axelDialogCancel">Voltar e conferir</button><button type="button" id="axelDialogAccept" class="axel-dialog-primary">Continuar</button></div>
+</dialog>
+
 <div id="splash" class="splash" aria-hidden="true" title="Clique para pular">
   <div class="splash-inner">
     <div class="splash-logo"><span>A</span><span>X</span><span>E</span><span>L</span></div>
@@ -881,6 +918,97 @@ let salutationIndex = 0;
 // Só a PALAVRA de saudação gira. O resto do corpo fica exatamente como você escreveu.
 const SALUTATIONS = ["Ei", "Olá", "Oi", "Eii", "Oii", "Opa"];
 
+// A single queued dialog keeps confirmations asynchronous and keyboard accessible.
+let axelDialogQueue = Promise.resolve();
+function axelDialogText(value){ return String(value == null ? '' : value).replace(/\\\\n/g, '\\n'); }
+function showAxelDialog(options){
+  const result = axelDialogQueue.then(() => new Promise(resolve => {
+    const dialog = document.getElementById('axelDialog');
+    const previousFocus = document.activeElement;
+    const accept = document.getElementById('axelDialogAccept');
+    const cancel = document.getElementById('axelDialogCancel');
+    const input = document.getElementById('axelDialogInput');
+    const details = document.getElementById('axelDialogDetails');
+    const warning = document.getElementById('axelDialogWarning');
+    const note = document.getElementById('axelDialogNote');
+    document.getElementById('axelDialogTitle').textContent = options.title || 'Só um instante.';
+    document.getElementById('axelDialogMessage').textContent = axelDialogText(options.message);
+    document.getElementById('axelDialogEyebrow').textContent = options.kind === 'alert' ? 'AXEL · AVISO' : 'AXEL · CONFIRMAÇÃO';
+    accept.textContent = options.acceptLabel || (options.kind === 'alert' ? 'Entendi' : 'Confirmar');
+    accept.className = options.danger ? 'axel-dialog-danger' : 'axel-dialog-primary';
+    cancel.textContent = options.cancelLabel || 'Voltar e conferir';
+    cancel.hidden = options.kind === 'alert';
+    input.hidden = options.kind !== 'prompt';
+    input.value = options.value || '';
+    details.replaceChildren();
+    (options.details || []).forEach(item => {
+      const row = document.createElement('div');
+      const label = document.createElement('dt');
+      const value = document.createElement('dd');
+      label.textContent = item.label;
+      value.textContent = String(item.value == null ? '' : item.value);
+      if(item.code) value.dataset.code = 'true';
+      row.append(label, value);
+      details.appendChild(row);
+    });
+    details.hidden = !details.childElementCount;
+    warning.textContent = axelDialogText(options.warning);
+    warning.hidden = !options.warning;
+    note.textContent = options.note || '';
+    note.hidden = !options.note;
+    let settled = false;
+    function finish(accepted){
+      if(settled) return;
+      if(accepted && options.kind === 'prompt' && !input.value.trim()){
+        input.setCustomValidity('Dê um nome para continuar.');
+        input.reportValidity();
+        return;
+      }
+      settled = true;
+      const value = options.kind === 'prompt' ? (accepted ? input.value : null) : accepted;
+      accept.removeEventListener('click', onAccept);
+      cancel.removeEventListener('click', onCancel);
+      dialog.removeEventListener('cancel', onEscape);
+      dialog.removeEventListener('click', onBackdrop);
+      dialog.removeEventListener('close', onCancel);
+      input.removeEventListener('keydown', onInputKey);
+      input.removeEventListener('input', onInput);
+      dialog.close();
+      if(previousFocus && previousFocus.isConnected) previousFocus.focus({preventScroll:true});
+      resolve(value);
+    }
+    function onAccept(){ finish(true); }
+    function onCancel(){ finish(false); }
+    function onEscape(event){ event.preventDefault(); finish(false); }
+    function onInput(){ input.setCustomValidity(''); }
+    function onInputKey(event){ if(event.key === 'Enter'){ event.preventDefault(); finish(true); } }
+    function onBackdrop(event){
+      if(event.target !== dialog) return;
+      const rect = dialog.getBoundingClientRect();
+      if(event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) finish(false);
+    }
+    accept.addEventListener('click', onAccept);
+    cancel.addEventListener('click', onCancel);
+    dialog.addEventListener('cancel', onEscape);
+    dialog.addEventListener('click', onBackdrop);
+    dialog.addEventListener('close', onCancel);
+    input.addEventListener('keydown', onInputKey);
+    input.addEventListener('input', onInput);
+    input.setCustomValidity('');
+    dialog.showModal();
+    if(options.kind === 'prompt'){ input.focus(); input.select(); }
+    else (options.kind === 'alert' ? accept : cancel).focus();
+  }));
+  axelDialogQueue = result.catch(() => {});
+  return result;
+}
+function axelAlert(message){ return showAxelDialog({kind:'alert', message}); }
+function axelConfirm(message, options){
+  const danger = /apagar|permanentemente|desfeita/i.test(message);
+  return showAxelDialog(Object.assign({kind:'confirm', title:danger ? 'Antes de apagar…' : 'Vamos conferir?', message, danger, acceptLabel:danger ? 'Sim, apagar' : 'Confirmar'}, options || {}));
+}
+function axelPrompt(message, value){ return showAxelDialog({kind:'prompt', title:'Como vamos chamar?', message, value, acceptLabel:'Salvar corpo', cancelLabel:'Cancelar'}); }
+
 function getNextSalutation() {
   const salutation = SALUTATIONS[salutationIndex];
   salutationIndex = (salutationIndex + 1) % SALUTATIONS.length;
@@ -940,17 +1068,16 @@ document.getElementById('templateForm').addEventListener('submit', async functio
 
   const qty = Math.max(1, Math.min(parseInt(base.qty) || 1, MAX_QTY));
   if(!base.location_id || !base.base_name || !base.date_suffix || !base.body_text){
-    alert('Preencha os campos obrigatórios.');
+    await axelAlert('Preencha os campos obrigatórios.');
     return;
   }
   const varInfo = checkVars();
-  if(varInfo.mismatch && !confirm(varInfo.text + '\\n\\nCriar mesmo assim?')) return;
   const headerErr = validateHeader();
-  if(headerErr){ alert(headerErr); return; }
+  if(headerErr){ await axelAlert(headerErr); return; }
   const buttonsErr = validateButtons();
-  if(buttonsErr){ alert(buttonsErr); return; }
+  if(buttonsErr){ await axelAlert(buttonsErr); return; }
   base.buttons_json = JSON.stringify(BUTTONS);
-  if(!confirmCompanyForSubaccount(base)) return;
+  if(!await confirmCompanyForSubaccount(base, qty, varInfo)) return;
 
   stopFlag = false;
   salutationIndex = 0;
@@ -1253,8 +1380,8 @@ function markTokenExpired(){
 });
 
 
-document.getElementById('resetTimerBtn').addEventListener('click', () => {
-  if(!tokenFingerprint()){ alert('Cole os tokens de sessão primeiro.'); return; }
+document.getElementById('resetTimerBtn').addEventListener('click', async () => {
+  if(!tokenFingerprint()){ await axelAlert('Cole os tokens de sessão primeiro.'); return; }
   startTokenTimer();
 });
 
@@ -1427,7 +1554,7 @@ document.getElementById('selectAllTemplates').addEventListener('change', functio
 document.getElementById('loadTemplatesBtn').addEventListener('click', async function(){
   const creds = getCredsFromForm();
   if(!creds.location_id){
-    alert('Preencha o Location ID e as credenciais primeiro.');
+    await axelAlert('Preencha o Location ID e as credenciais primeiro.');
     return;
   }
 
@@ -1444,7 +1571,7 @@ document.getElementById('loadTemplatesBtn').addEventListener('click', async func
     const data = await res.json();
 
     if(!data.ok){
-      alert(data.error || 'Não foi possível buscar os modelos.');
+      await axelAlert(data.error || 'Não foi possível buscar os modelos.');
       btn.disabled = false;
       btn.textContent = 'Buscar modelos existentes';
       return;
@@ -1458,10 +1585,10 @@ document.getElementById('loadTemplatesBtn').addEventListener('click', async func
     renderTemplatesList();
 
     if(loadedTemplates.length === 0){
-      alert('Nenhum modelo encontrado nessa sub-conta.');
+      await axelAlert('Nenhum modelo encontrado nessa sub-conta.');
     }
   }catch(err){
-    alert('Erro ao buscar modelos: ' + err.message);
+    await axelAlert('Erro ao buscar modelos: ' + err.message);
   }
 
   btn.disabled = false;
@@ -1471,12 +1598,12 @@ document.getElementById('loadTemplatesBtn').addEventListener('click', async func
 document.getElementById('deleteSelectedBtn').addEventListener('click', async function(){
   const checkboxes = Array.from(document.querySelectorAll('.tpl-checkbox:checked'));
   if(checkboxes.length === 0){
-    alert('Selecione ao menos um modelo pra apagar.');
+    await axelAlert('Selecione ao menos um modelo pra apagar.');
     return;
   }
 
   const names = checkboxes.map(cb => cb.dataset.name);
-  const confirmed = confirm(
+  const confirmed = await axelConfirm(
     `Isso vai apagar ${checkboxes.length} modelo(s) PERMANENTEMENTE:\\n\\n` +
     names.slice(0, 15).join('\\n') + (names.length > 15 ? `\\n... e mais ${names.length - 15}` : '') +
     `\\n\\nConfirma?`
@@ -1579,7 +1706,7 @@ function renderMoveFolderOptions(){
 async function refreshMoveFolders(silent){
   const creds = getCredsFromForm();
   if(!creds.location_id){
-    if(!silent) alert('Preencha o Location ID e as credenciais primeiro.');
+    if(!silent) await axelAlert('Preencha o Location ID e as credenciais primeiro.');
     return;
   }
   try{
@@ -1592,10 +1719,10 @@ async function refreshMoveFolders(silent){
     if(data.ok){
       FOLDERS = data.folders || [];
     }else if(!silent){
-      alert('Não foi possível buscar as pastas: ' + (data.error || 'erro desconhecido'));
+      await axelAlert('Não foi possível buscar as pastas: ' + (data.error || 'erro desconhecido'));
     }
   }catch(err){
-    if(!silent) alert('Erro ao buscar pastas: ' + err.message);
+    if(!silent) await axelAlert('Erro ao buscar pastas: ' + err.message);
   }
   renderMoveFolderOptions();
 }
@@ -1611,18 +1738,18 @@ document.getElementById('refreshMoveFoldersBtn').addEventListener('click', async
 document.getElementById('moveSelectedBtn').addEventListener('click', async function(){
   const checkboxes = Array.from(document.querySelectorAll('.tpl-checkbox:checked'));
   if(checkboxes.length === 0){
-    alert('Selecione ao menos um modelo pra mover.');
+    await axelAlert('Selecione ao menos um modelo pra mover.');
     return;
   }
   const folderId = document.getElementById('moveFolderSelect').value;
   if(!folderId){
-    alert('Escolha a pasta de destino (clique em "Atualizar pastas" se a lista estiver vazia).');
+    await axelAlert('Escolha a pasta de destino (clique em "Atualizar pastas" se a lista estiver vazia).');
     return;
   }
   const folderName = folderNameById(folderId) || folderId;
 
   const names = checkboxes.map(cb => cb.dataset.name);
-  const confirmed = confirm(
+  const confirmed = await axelConfirm(
     `Mover ${checkboxes.length} modelo(s) para a pasta "${folderName}"?\\n\\n` +
     names.slice(0, 15).join('\\n') + (names.length > 15 ? `\\n... e mais ${names.length - 15}` : '')
   );
@@ -1774,18 +1901,43 @@ function findSubaccountByName(name){
 
 function activeSub(){ return SUBACCOUNTS.find(s => s.key === ACTIVE_SUB) || null; }
 
-function confirmCompanyForSubaccount(base){
-  const locationId = String(base.location_id || '').trim();
-  const selected = activeSub();
-  const sub = selected && String(selected.location_id || '').trim() === locationId
-    ? selected
-    : SUBACCOUNTS.find(s => String(s.location_id || '').trim() === locationId);
-  if(!sub || !locationId) return true;
-  const company = String(base.company_name || '').trim();
-  if(normName(company) === normName(sub.label)) return true;
-  return confirm('A sub-conta de destino é "' + sub.label + '", mas o Nome da Empresa está como "'
-    + (company || '[Empresa] (não preenchido)') + '".\\n\\nDeseja criar os modelos mesmo com esse nome de empresa?');
+let creationReviewOpen = false;
+async function confirmCompanyForSubaccount(base, qty, varInfo){
+  if(creationReviewOpen) return false;
+  creationReviewOpen = true;
+  try{
+    const locationId = String(base.location_id || '').trim();
+    const selected = activeSub();
+    const sub = selected && String(selected.location_id || '').trim() === locationId
+      ? selected : SUBACCOUNTS.find(s => String(s.location_id || '').trim() === locationId);
+    const company = String(base.company_name || '').trim();
+    const mismatch = sub && normName(company) !== normName(sub.label);
+    const warnings = [];
+    if(mismatch) warnings.push('A empresa "' + (company || '[Empresa] não preenchida') + '" está diferente da subconta "' + sub.label + '". Confira antes de continuar.');
+    if(varInfo && varInfo.mismatch) warnings.push(varInfo.text);
+    const phrases = [
+      {title:'Calma aí, patrão.', message:'Confira se a subconta e o nome dos modelos estão certos antes de criar.'},
+      {title:'Calma aí, chefia.', message:'Tá muito apressado? Confira a subconta e o nome dos modelos antes de criar.'}
+    ];
+    const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+    const pattern = 'vN_' + templatePart(base.base_name) + '_' + templatePart(base.date_suffix);
+    return await axelConfirm(phrase.message, {
+      title:phrase.title,
+      details:[
+        {label:'Subconta', value:sub ? sub.label : 'Destino não salvo nas subcontas'},
+        {label:'Empresa', value:company || '[Empresa] não preenchida'},
+        {label:'Modelos', value:pattern, code:true},
+        {label:'Quantidade', value:String(qty) + (qty === 1 ? ' modelo' : ' modelos')},
+        {label:'Location ID', value:locationId, code:true}
+      ],
+      warning:warnings.join('\\n\\n'),
+      note:'N será o próximo número livre na subconta.',
+      acceptLabel:warnings.length ? 'Criar mesmo assim' : (qty === 1 ? 'Criar modelo' : 'Criar modelos'),
+      cancelLabel:'Voltar e conferir'
+    });
+  }finally{ creationReviewOpen = false; }
 }
+
 
 function setLogEl(id, msg, kind){
   const el = document.getElementById(id);
@@ -1970,14 +2122,14 @@ document.getElementById('location_id').addEventListener('change', function(){
 document.getElementById('saveSubaccountBtn').addEventListener('click', async function(){
   const nameInput = document.getElementById('subaccountName');
   const label = nameInput.value.trim();
-  if(!label){ alert('Digite um nome pra sub-conta (ex: Polishop).'); nameInput.focus(); return; }
+  if(!label){ await axelAlert('Digite um nome pra sub-conta (ex: Polishop).'); nameInput.focus(); return; }
   const location_id = document.getElementById('location_id').value.trim();
-  if(!location_id){ alert('Preencha o Location ID antes de salvar a sub-conta.'); return; }
+  if(!location_id){ await axelAlert('Preencha o Location ID antes de salvar a sub-conta.'); return; }
   const key = subKeyOf(label);
-  if(!key){ alert('Nome inválido — use letras ou números.'); return; }
+  if(!key){ await axelAlert('Nome inválido — use letras ou números.'); return; }
   const existing = SUBACCOUNTS.find(s => s.key === key);
   if(existing && existing.location_id && existing.location_id !== location_id &&
-     !confirm('Já existe a sub-conta "' + existing.label + '" com outro Location ID (' + existing.location_id + ').\\n\\nSubstituir pelo Location ID atual?')){
+     !await axelConfirm('Já existe a sub-conta "' + existing.label + '" com outro Location ID (' + existing.location_id + ').\\n\\nSubstituir pelo Location ID atual?')){
     return;
   }
 
@@ -2000,7 +2152,7 @@ document.getElementById('saveSubaccountBtn').addEventListener('click', async fun
 
 document.getElementById('saveFolderEndpointsBtn').addEventListener('click', async function(){
   const s = activeSub();
-  if(!s){ alert('Selecione (ou salve) uma sub-conta nas Credenciais primeiro.'); return; }
+  if(!s){ await axelAlert('Selecione (ou salve) uma sub-conta nas Credenciais primeiro.'); return; }
   const btn = this;
   btn.disabled = true; btn.textContent = 'Salvando...';
   const data = await postJSON('/api/save-subaccount', Object.assign(
@@ -2020,7 +2172,7 @@ document.getElementById('saveFolderEndpointsBtn').addEventListener('click', asyn
 document.getElementById('deleteSubaccountBtn').addEventListener('click', async function(){
   const s = activeSub();
   if(!s) return;
-  if(!confirm(`Apagar a sub-conta salva "${s.label}"? Isso só remove o atalho local (não mexe em nada no GHL).`)) return;
+  if(!await axelConfirm(`Apagar a sub-conta salva "${s.label}"? Isso só remove o atalho local (não mexe em nada no GHL).`)) return;
   const btn = this;
   btn.disabled = true; btn.textContent = 'Apagando...';
   const data = await postJSON('/api/delete-subaccount', { key: s.key });
@@ -2050,7 +2202,7 @@ async function postJSON(url, body){
 }
 
 async function deleteFolder(id, name, row){
-  if(!confirm(`Apagar a pasta "${name}"? Essa ação não pode ser desfeita.`)) return;
+  if(!await axelConfirm(`Apagar a pasta "${name}"? Essa ação não pode ser desfeita.`)) return;
   const creds = getCredsFromForm();
   const btn = row.querySelector('button[data-del]');
   if(btn){ btn.disabled = true; btn.textContent = 'Apagando...'; }
@@ -2071,7 +2223,7 @@ async function deleteFolder(id, name, row){
     renderMoveFolderOptions();
   }else{
     if(btn){ btn.disabled = false; btn.textContent = 'Apagar'; }
-    alert('Falha ao apagar: ' + (data.msg || 'erro desconhecido') + (data.detail ? '\\n\\n' + data.detail : ''));
+    await axelAlert('Falha ao apagar: ' + (data.msg || 'erro desconhecido') + (data.detail ? '\\n\\n' + data.detail : ''));
   }
 }
 
@@ -2116,11 +2268,11 @@ function addFolderRow(container, f){
 
 document.getElementById('createFoldersBtn').addEventListener('click', async function(){
   const creds = getCredsFromForm();
-  if(!creds.location_id){ alert('Preencha o Location ID e as credenciais primeiro.'); return; }
+  if(!creds.location_id){ await axelAlert('Preencha o Location ID e as credenciais primeiro.'); return; }
 
   const names = document.getElementById('folderNames').value
     .split(/[\\n,]+/).map(n => n.trim()).filter(Boolean);
-  if(names.length === 0){ alert('Digite ao menos um nome de pasta.'); return; }
+  if(names.length === 0){ await axelAlert('Digite ao menos um nome de pasta.'); return; }
 
   const btn = this;
   btn.disabled = true; btn.textContent = 'Criando...';
@@ -2175,7 +2327,7 @@ async function loadFolders(opts){
   opts = opts || {};
   const creds = getCredsFromForm();
   if(!creds.location_id){
-    if(!opts.silent) alert('Preencha o Location ID e as credenciais primeiro.');
+    if(!opts.silent) await axelAlert('Preencha o Location ID e as credenciais primeiro.');
     return { ok: false, error: 'Location ID vazio' };
   }
   const seq = ++folderReqSeq;
@@ -2321,7 +2473,7 @@ async function addPreset(kind){
   const ui = PRESET_UI[kind];
   const input = document.getElementById(ui.input);
   const value = normList(input.value);
-  if(!value){ alert('Digite no campo o que quer salvar como opção.'); input.focus(); return; }
+  if(!value){ await axelAlert('Digite no campo o que quer salvar como opção.'); input.focus(); return; }
   const data = await postJSON('/api/presets/add', { kind, value });
   if(data.presets) PRESETS = data.presets;
   if(data.ok){
@@ -2337,8 +2489,8 @@ async function addPreset(kind){
 async function deletePreset(kind){
   const ui = PRESET_UI[kind];
   const value = document.getElementById(ui.select).value;
-  if(!value){ alert('Escolha na lista a opção que quer apagar.'); return; }
-  if(!confirm('Apagar esta opção da lista?\\n\\n' + presetText(kind, value) + '\\n\\n(O texto que está no campo continua igual.)')) return;
+  if(!value){ await axelAlert('Escolha na lista a opção que quer apagar.'); return; }
+  if(!await axelConfirm('Apagar esta opção da lista?\\n\\n' + presetText(kind, value) + '\\n\\n(O texto que está no campo continua igual.)')) return;
   const data = await postJSON('/api/presets/delete', { kind, value });
   if(data.presets) PRESETS = data.presets;
   setPresetNote(data.ok ? 'Opção apagada.' : (data.msg || 'falha ao apagar'), data.ok ? 'ok' : 'err');
@@ -2737,12 +2889,12 @@ document.getElementById('bodyPresetSelect').addEventListener('change', function(
 
 document.getElementById('bodySaveBtn').addEventListener('click', async () => {
   const text = document.getElementById('body_text').value;
-  if(!text.trim()){ alert('Escreva o corpo antes de salvar.'); return; }
+  if(!text.trim()){ await axelAlert('Escreva o corpo antes de salvar.'); return; }
   const sel = document.getElementById('bodyPresetSelect').value;
-  const name = (prompt('Nome desse corpo (ex: Nota fiscal + rastreio).\\nSe usar um nome que já existe, ele é atualizado.', sel || '') || '').trim();
+  const name = (await axelPrompt('Nome desse corpo (ex: Nota fiscal + rastreio).\\nSe usar um nome que já existe, ele é atualizado.', sel || '') || '').trim();
   if(!name) return;
   const existing = BODIES.items.find(b => b.name.toLowerCase() === name.toLowerCase());
-  if(existing && existing.text !== text && !confirm('Já existe o corpo "' + existing.name + '". Substituir pelo texto atual?')) return;
+  if(existing && existing.text !== text && !await axelConfirm('Já existe o corpo "' + existing.name + '". Substituir pelo texto atual?')) return;
   const data = await postJSON('/api/bodies/save', { name, text });
   if(data.items) BODIES = { default: data.default, items: data.items };
   setBodyNote(data.ok ? data.msg + ' ✓' : (data.msg || 'falha ao salvar'), data.ok ? 'ok' : 'err');
@@ -2761,7 +2913,7 @@ document.getElementById('bodyDefaultBtn').addEventListener('click', async () => 
 document.getElementById('bodyDelBtn').addEventListener('click', async () => {
   const name = document.getElementById('bodyPresetSelect').value;
   if(!name) return;
-  if(!confirm('Apagar o corpo salvo "' + name + '"?\\n\\n(O texto que está no campo continua igual.)')) return;
+  if(!await axelConfirm('Apagar o corpo salvo "' + name + '"?\\n\\n(O texto que está no campo continua igual.)')) return;
   const data = await postJSON('/api/bodies/delete', { name });
   if(data.items) BODIES = { default: data.default, items: data.items };
   setBodyNote(data.ok ? data.msg : (data.msg || 'falha ao apagar'), data.ok ? 'ok' : 'err');
