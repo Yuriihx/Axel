@@ -5,7 +5,11 @@ const GHL_HOSTS = new Set([
   'app.msgsndr.com',
   'app.leadconnectorhq.com'
 ]);
-const AXEL_ORIGIN = 'https://axel-ghl.onrender.com';
+const AXEL_URL_PATTERNS = [
+  'https://axel-ghl.onrender.com/*',
+  'http://127.0.0.1/*',
+  'http://localhost/*'
+];
 const TEMPLATE_PATH = /^\/phone-system\/whatsapp\/location\/([A-Za-z0-9_-]{5,100})\/template\/?$/;
 const TOKEN_PREFIX = 'token:';
 
@@ -37,11 +41,17 @@ function isGhlSender(sender, locationId, requestUrl) {
 
 function isAxelSender(sender) {
   if (!sender || sender.frameId !== 0 || !sender.tab || !sender.tab.url) return false;
-  try { return new URL(sender.tab.url).origin === AXEL_ORIGIN; } catch (_) { return false; }
+  try {
+    const page = new URL(sender.tab.url);
+    if (page.origin === 'https://axel-ghl.onrender.com') return true;
+    return page.protocol === 'http:' &&
+      (page.hostname === '127.0.0.1' || page.hostname === 'localhost') &&
+      page.port === '5057';
+  } catch (_) { return false; }
 }
 
 async function notifyAxel(locationId) {
-  const tabs = await chrome.tabs.query({ url: `${AXEL_ORIGIN}/*` });
+  const tabs = await chrome.tabs.query({ url: AXEL_URL_PATTERNS });
   await Promise.all(tabs.map(tab => chrome.tabs.sendMessage(tab.id, {
     type: 'TOKEN_AVAILABLE', locationId
   }).catch(() => {})));
@@ -95,4 +105,3 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return false;
 });
-
