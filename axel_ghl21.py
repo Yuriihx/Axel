@@ -2150,7 +2150,7 @@ function requestAutoTokensForCurrentLocation(opts){
   setTimeout(() => {
     if(pendingAutoTokenRequest !== requestId || activeTokenLocationId === locationId) return;
     pendingAutoTokenRequest = 0;
-    setAutoTokenStatus('Não recebi resposta da extensão nesta aba. Abra o AXEL no mesmo perfil do Google Chrome onde a extensão foi instalada e confira se a versão 1.0.2 está ativa.');
+    setAutoTokenStatus('Não recebi resposta da extensão nesta aba. Abra o AXEL no mesmo perfil do Google Chrome onde a extensão foi instalada e confira se a versão 1.0.3 está ativa.');
   }, 3000);
 }
 
