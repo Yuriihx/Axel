@@ -1,6 +1,10 @@
 (() => {
   'use strict';
-  if (location.origin !== 'https://axel-ghl.onrender.com') return;
+  const production = location.origin === 'https://axel-ghl.onrender.com';
+  const local = location.protocol === 'http:' &&
+    (location.hostname === '127.0.0.1' || location.hostname === 'localhost') &&
+    location.port === '5057';
+  if (!production && !local) return;
 
   const REQUEST_EVENT = 'axel-ghl-token-request';
   const RESPONSE_EVENT = 'axel-ghl-token-response';
@@ -35,4 +39,3 @@
     }
   });
 })();
-
