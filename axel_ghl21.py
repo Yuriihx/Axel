@@ -3818,7 +3818,7 @@ def inspect_tokens(creds, subaccounts=None):
     if c["token_id"] and not t_claims:
         info["problems"].append("O token-id não parece um JWT (deve começar com eyJ e ter 2 pontos).")
     if c["auth_token"] and c["auth_token"] == c["token_id"]:
-        info["problems"].append("Authorization e token-id estão iguais — são dois valores diferentes no DevTools.")
+        info["problems"].append("Authorization e token-id estão iguais — o GHL precisa enviar dois cabeçalhos diferentes.")
     if c["swapped"]:
         info["notes"].append("Authorization e token-id estavam trocados — o AXEL destrocou sozinho.")
     if info["expired"]:
