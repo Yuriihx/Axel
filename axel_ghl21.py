@@ -555,10 +555,16 @@ PAGE = """
         <button class="btn ghost" type="button" id="saveSubaccountBtn" title="Salva nome + Location ID + endpoints de pasta">Salvar sub-conta</button>
       </div>
       <div id="subaccountLog" class="log-msg sub-log"></div>
-      <div class="hint">Instale a extensão do Chrome uma vez e mantenha sua sessão do GHL aberta. Ao abrir Modelos de WhatsApp no GHL, o AXEL atualiza as credenciais desta subconta automaticamente. <a href="/download/chrome-extension.zip">Baixar extensão do AXEL</a><span id="subaccountFile"></span></div>
-      <div id="autoTokenStatus" class="conn-result" role="status" aria-live="polite">Instale a extensão do Chrome uma vez, atualize esta página e abra WhatsApp → Modelos no GHL para capturar a sessão.</div>
-      <input type="hidden" name="auth_token" value="">
-      <input type="hidden" name="token_id" value="">
+      <div class="hint">Mantenha a sessão do GHL aberta. Ao abrir WhatsApp → Modelos, a extensão captura a sessão para esta subconta. <a href="/download/chrome-extension.zip">Baixar extensão atualizada do AXEL</a><span id="subaccountFile"></span></div>
+      <div class="inline-row">
+        <button class="btn ghost" type="button" id="getAutoTokenBtn">Pegar token</button>
+        <span class="hint">Busca na extensão a sessão já capturada no GHL.</span>
+      </div>
+      <div id="autoTokenStatus" class="conn-result" role="status" aria-live="polite">Abra WhatsApp → Modelos no GHL para capturar automaticamente. Também pode preencher os dois campos abaixo.</div>
+      <label for="auth_token">Authorization</label>
+      <input type="text" name="auth_token" id="auth_token" value="" placeholder="Cole o token Authorization (com ou sem Bearer)" autocomplete="off" spellcheck="false">
+      <label for="token_id">token-id</label>
+      <input type="text" name="token_id" id="token_id" value="" placeholder="Cole o token-id da subconta" autocomplete="off" spellcheck="false">
 
       <div id="tokenTimer" class="token-timer idle">
         <div class="tt-top">
@@ -1403,18 +1409,38 @@ function markTokenExpired(){
   tickTokenTimer();
 }
 
+let applyingAutoTokenResponse = false;
 ['auth_token', 'token_id'].forEach(field => {
   document.getElementById('templateForm').elements[field].addEventListener('input', () => {
+    const form = document.getElementById('templateForm');
+    const locationId = document.getElementById('location_id').value.trim();
+    const complete = !!(form.elements['auth_token'].value.trim() && form.elements['token_id'].value.trim());
+    if(!applyingAutoTokenResponse){
+      if(complete && locationId){
+        activeTokenLocationId = locationId;
+        setAutoTokenStatus('Authorization e token-id informados para esta subconta.', 'ok');
+      }else if(activeTokenLocationId === locationId){
+        activeTokenLocationId = '';
+      }
+    }
+    if(!complete){
+      if(tokenTimer.fp){ tokenTimer = { fp: '', startedAt: 0, confirmedAt: 0 }; saveTokenTimer(); tickTokenTimer(); }
+      return;
+    }
     const fp = tokenFingerprint();
     if(fp === tokenTimer.fp) return;
     if(!fp){ tokenTimer = { fp: '', startedAt: 0, confirmedAt: 0 }; saveTokenTimer(); tickTokenTimer(); return; }
-    startTokenTimer();  // token novo colado -> 1 hora do zero
+    startTokenTimer();  // token novo informado ou capturado -> 1 hora do zero
     scheduleFolderSync();  // já sincroniza as pastas da sub-conta selecionada
   });
 });
 
 
 document.getElementById('resetTimerBtn').addEventListener('click', async () => {
+  requestAutoTokensForCurrentLocation();
+});
+
+document.getElementById('getAutoTokenBtn').addEventListener('click', () => {
   requestAutoTokensForCurrentLocation();
 });
 
@@ -2100,6 +2126,7 @@ const AUTO_TOKEN_RESPONSE_EVENT = 'axel-ghl-token-response';
 const AUTO_TOKEN_AVAILABLE_EVENT = 'axel-ghl-token-available';
 let autoTokenRequestSeq = 0;
 let pendingAutoTokenRequest = 0;
+let applyingAutoTokenResponse = false;
 
 function setAutoTokenStatus(message, kind){
   const el = document.getElementById('autoTokenStatus');
@@ -2123,7 +2150,7 @@ function requestAutoTokensForCurrentLocation(opts){
   }));
   setTimeout(() => {
     if(pendingAutoTokenRequest !== requestId || activeTokenLocationId === locationId) return;
-    setAutoTokenStatus('Aguardando captura no GHL. Mantenha o Chrome conectado e abra WhatsApp → Modelos na subconta correspondente. Se a extensão ainda não estiver instalada, baixe-a acima e atualize esta página.');
+    setAutoTokenStatus('Nenhuma sessão encontrada ainda. No GHL, abra WhatsApp → Modelos, aguarde carregar e clique em Pegar token. Se preferir, cole Authorization e token-id manualmente abaixo.');
   }, 1600);
 }
 
@@ -2145,14 +2172,19 @@ window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
   const locationId = document.getElementById('location_id').value.trim();
   if(data.version !== 1 || data.requestId !== pendingAutoTokenRequest || data.locationId !== locationId) return;
   if(!data.ok || !data.authToken || !data.tokenId){
-    setAutoTokenStatus('Ainda não há uma sessão capturada para esta subconta. No GHL, abra WhatsApp → Modelos e aguarde a lista carregar.');
+    setAutoTokenStatus('Ainda não há sessão capturada para esta subconta. Abra WhatsApp → Modelos no GHL e tente novamente, ou preencha os dois campos manualmente.');
     return;
   }
   const form = document.getElementById('templateForm');
   activeTokenLocationId = locationId;
   form.elements['auth_token'].value = String(data.authToken);
   form.elements['token_id'].value = String(data.tokenId);
-  ['auth_token', 'token_id'].forEach(name => form.elements[name].dispatchEvent(new Event('input', { bubbles: true })));
+  applyingAutoTokenResponse = true;
+  try {
+    ['auth_token', 'token_id'].forEach(name => form.elements[name].dispatchEvent(new Event('input', { bubbles: true })));
+  } finally {
+    applyingAutoTokenResponse = false;
+  }
   setAutoTokenStatus('Sessão atualizada automaticamente para esta subconta pelo Chrome.', 'ok');
 });
 
