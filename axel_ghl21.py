@@ -555,7 +555,7 @@ PAGE = """
         <button class="btn ghost" type="button" id="saveSubaccountBtn" title="Salva nome + Location ID + endpoints de pasta">Salvar sub-conta</button>
       </div>
       <div id="subaccountLog" class="log-msg sub-log"></div>
-      <div class="hint">Mantenha o GHL e o AXEL abertos no mesmo perfil do Google Chrome onde a extensão foi instalada. No GHL, abra WhatsApp → Modelos para capturar a sessão para esta subconta. <a href="/download/chrome-extension.zip">Baixar extensão atualizada do AXEL</a><span id="subaccountFile"></span></div>
+      <div class="hint">Mantenha o GHL e o AXEL abertos no mesmo perfil do Google Chrome onde a extensão foi instalada. Abra WhatsApp → Modelos para capturar os tokens; o par pode ser reutilizado nas subcontas acessíveis, alterando o Location ID. <a href="/download/chrome-extension.zip">Baixar extensão atualizada do AXEL</a><span id="subaccountFile"></span></div>
       <div class="inline-row">
         <button class="btn ghost" type="button" id="getAutoTokenBtn">Pegar token</button>
         <span class="hint">Busca na extensão a sessão já capturada no GHL.</span>
@@ -1418,7 +1418,7 @@ let applyingAutoTokenResponse = false;
     if(!applyingAutoTokenResponse){
       if(complete && locationId){
         activeTokenLocationId = locationId;
-        setAutoTokenStatus('Authorization e token-id informados para esta subconta.', 'ok');
+        setAutoTokenStatus('Authorization e token-id informados. Você pode reutilizá-los nas subcontas acessíveis, alterando o Location ID.', 'ok');
       }else if(activeTokenLocationId === locationId){
         activeTokenLocationId = '';
       }
@@ -1496,11 +1496,10 @@ function getCredsFromForm(){
   const form = document.getElementById('templateForm');
   const fd = new FormData(form);
   const location_id = fd.get('location_id') || '';
-  const tokenMatchesLocation = activeTokenLocationId === String(location_id).trim();
   return {
     location_id,
-    auth_token: tokenMatchesLocation ? (fd.get('auth_token') || '') : '',
-    token_id: tokenMatchesLocation ? (fd.get('token_id') || '') : '',
+    auth_token: fd.get('auth_token') || '',
+    token_id: fd.get('token_id') || '',
   };
 }
 
@@ -2148,23 +2147,14 @@ function requestAutoTokensForCurrentLocation(opts){
     detail: { version: 1, requestId, locationId }
   }));
   setTimeout(() => {
-    if(pendingAutoTokenRequest !== requestId || activeTokenLocationId === locationId) return;
+    if(pendingAutoTokenRequest !== requestId) return;
     pendingAutoTokenRequest = 0;
-    setAutoTokenStatus('Não recebi resposta da extensão nesta aba. Abra o AXEL no mesmo perfil do Google Chrome onde a extensão foi instalada e confira se a versão 1.0.3 está ativa.');
-  }, 3000);
-}
-
-function clearAutoTokenFields(){
-  activeTokenLocationId = '';
-  const form = document.getElementById('templateForm');
-  ['auth_token', 'token_id'].forEach(name => {
-    const field = form.elements[name];
-    if(field && field.value){
-      field.value = '';
-      field.dispatchEvent(new Event('input', { bubbles: true }));
+    if(hasSessionTokens()){
+      setAutoTokenStatus('A extensão não respondeu; o par atual continua preenchido e pode ser usado com o Location ID selecionado.');
+      return;
     }
-  });
-  setAutoTokenStatus('Buscando a sessão da subconta selecionada no Chrome…');
+    setAutoTokenStatus('Não recebi resposta da extensão nesta aba. Abra o AXEL no mesmo perfil do Google Chrome onde a extensão foi instalada e confira se a versão 1.0.4 está ativa.');
+  }, 3000);
 }
 
 window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
@@ -2177,11 +2167,11 @@ window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
     return;
   }
   if(!data.ok || !data.authToken || !data.tokenId){
-    setAutoTokenStatus('A extensão está conectada, mas ainda não capturou esta subconta. No mesmo Chrome, abra GHL → subconta correspondente → WhatsApp → Modelos, aguarde carregar e tente novamente.');
+    setAutoTokenStatus('A extensão está conectada, mas não há sessão capturada no Chrome. Abra WhatsApp → Modelos em uma subconta acessível, aguarde carregar e tente novamente.');
     return;
   }
   const form = document.getElementById('templateForm');
-  activeTokenLocationId = locationId;
+  activeTokenLocationId = String(data.capturedForLocationId || locationId);
   form.elements['auth_token'].value = String(data.authToken);
   form.elements['token_id'].value = String(data.tokenId);
   applyingAutoTokenResponse = true;
@@ -2190,7 +2180,10 @@ window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
   } finally {
     applyingAutoTokenResponse = false;
   }
-  setAutoTokenStatus('Sessão atualizada automaticamente para esta subconta pelo Chrome.', 'ok');
+  const capturedFor = String(data.capturedForLocationId || locationId);
+  setAutoTokenStatus(capturedFor === locationId
+    ? 'Sessão capturada no Chrome e pronta para esta subconta.'
+    : 'Sessão capturada na subconta ' + capturedFor + ' reutilizada. O Location ID selecionado define o destino.', 'ok');
 });
 
 window.addEventListener(AUTO_TOKEN_AVAILABLE_EVENT, event => {
@@ -2202,7 +2195,7 @@ window.addEventListener(AUTO_TOKEN_AVAILABLE_EVENT, event => {
 
 function hasSessionTokens(){
   const c = getCredsFromForm();
-  return !!(c.location_id.trim() && activeTokenLocationId === c.location_id.trim() && c.auth_token.trim() && c.token_id.trim());
+  return !!(c.location_id.trim() && c.auth_token.trim() && c.token_id.trim());
 }
 
 async function syncFoldersForActive(){
@@ -2249,7 +2242,9 @@ async function applySubaccount(key, opts){
     return;
   }
   document.getElementById('location_id').value = s.location_id || '';
-  if(previousLocationId !== String(s.location_id || '').trim() || activeTokenLocationId !== String(s.location_id || '').trim()) clearAutoTokenFields();
+  if(previousLocationId !== String(s.location_id || '').trim() && hasSessionTokens()){
+    setAutoTokenStatus('Mantendo a sessão capturada. O Location ID selecionado define a subconta de destino.', 'ok');
+  }
   document.getElementById('subaccountName').value = s.label || '';
   // Atualização 16.3: o nome base acompanha a sub-conta escolhida
   const baseInput = document.querySelector('[name="base_name"]');
@@ -2306,7 +2301,9 @@ async function initSubaccounts(){
 // Invalidate folder state as soon as the destination changes, before blur or save.
 document.getElementById('location_id').addEventListener('input', function(){
   detachFolderContext();
-  if(activeTokenLocationId && activeTokenLocationId !== this.value.trim()) clearAutoTokenFields();
+  if(activeTokenLocationId && activeTokenLocationId !== this.value.trim() && hasSessionTokens()){
+    setAutoTokenStatus('Mantendo a sessão capturada. O Location ID selecionado define a subconta de destino.', 'ok');
+  }
 });
 document.getElementById('location_id').addEventListener('change', function(){
   const loc = this.value.trim();

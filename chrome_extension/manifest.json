@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "AXEL — captura automática do GHL",
-  "version": "1.0.3",
-  "description": "Atualiza a sessão do AXEL ao usar Modelos de WhatsApp no GHL.",
+  "version": "1.0.4",
+  "description": "Captura e permite reutilizar a sessão do GHL entre subcontas acessíveis no AXEL.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://app.gohighlevel.com/*",

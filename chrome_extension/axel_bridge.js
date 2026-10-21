@@ -27,7 +27,8 @@
         extensionConnected: true,
         ok: !!(reply && reply.ok),
         authToken: reply && reply.authToken || '',
-        tokenId: reply && reply.tokenId || ''
+        tokenId: reply && reply.tokenId || '',
+        capturedForLocationId: reply && reply.capturedForLocationId || ''
       });
     } catch (_) {
       emit(RESPONSE_EVENT, { version: 1, requestId: data.requestId, locationId: data.locationId, extensionConnected: false, ok: false });

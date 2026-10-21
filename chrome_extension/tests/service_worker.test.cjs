@@ -47,6 +47,8 @@ const ghlSender = {
 
 const brandedLocationId = 'Qr7xM4nP9bV2kL6wC8dH';
 const brandedRequestUrl = `https://backend.leadconnectorhq.com/phone-system/whatsapp/location/${brandedLocationId}/template`;
+const brandedAuthToken = 'eyJhbGciOiJtest.authorization.for.branded';
+const brandedTokenId = 'eyJhbGciOiJtest.tokenid.branded';
 const brandedSender = {
   frameId: 0,
   tab: { url: 'https://app.grupohrz.com/v2/location/abc/settings/whatsapp?tab=templates' }
@@ -69,9 +71,10 @@ async function main() {
   assert.equal(notified[0].message.type, 'TOKEN_AVAILABLE');
   assert.equal(notified[0].message.locationId, locationId);
 
+  await new Promise(resolve => setTimeout(resolve, 5));
   messageListener({
     type: 'CAPTURE_TOKENS', locationId: brandedLocationId, requestUrl: brandedRequestUrl,
-    authToken, tokenId
+    authToken: brandedAuthToken, tokenId: brandedTokenId
   }, brandedSender, () => {});
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.ok(data[`token:${brandedLocationId}`], 'the white-label GHL domain can capture its template session');
@@ -99,6 +102,17 @@ async function main() {
   assert.equal(result.asyncResponse, true);
   assert.equal(result.response.authToken, authToken);
   assert.equal(result.response.tokenId, tokenId);
+  assert.equal(result.response.capturedForLocationId, locationId,
+    'an exact location session is preferred when it is available');
+
+  const reused = await send({ type: 'GET_TOKENS', locationId: 'newLocation456' }, {
+    frameId: 0, tab: { url: 'https://axel-ghl.onrender.com/' }
+  });
+  assert.equal(reused.response.authToken, brandedAuthToken,
+    'the latest captured session can be reused when the requested location has no exact capture');
+  assert.equal(reused.response.tokenId, brandedTokenId);
+  assert.equal(reused.response.capturedForLocationId, brandedLocationId,
+    'the source location is returned so AXEL can show that the pair is being reused');
 
   const localResult = await send({ type: 'GET_TOKENS', locationId }, {
     frameId: 0, tab: { url: 'http://127.0.0.1:5057/' }

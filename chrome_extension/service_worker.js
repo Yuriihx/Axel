@@ -75,10 +75,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'GET_TOKENS') {
     if (!isAxelSender(sender) || !validLocation(message.locationId)) return false;
-    chrome.storage.session.get(TOKEN_PREFIX + message.locationId).then(result => {
-      const record = result[TOKEN_PREFIX + message.locationId];
+    chrome.storage.session.get(null).then(all => {
+      const sessions = Object.entries(all)
+        .filter(([key, value]) => key.startsWith(TOKEN_PREFIX) && value &&
+          validLocation(value.locationId) && validToken(value.authToken) && validToken(value.tokenId))
+        .map(([, value]) => value)
+        .sort((a, b) => b.capturedAt - a.capturedAt);
+      const record = sessions.find(value => value.locationId === message.locationId) || sessions[0];
       sendResponse(record ? {
-        ok: true, authToken: record.authToken, tokenId: record.tokenId, capturedAt: record.capturedAt
+        ok: true, authToken: record.authToken, tokenId: record.tokenId,
+        capturedAt: record.capturedAt, capturedForLocationId: record.locationId
       } : { ok: false });
     }).catch(() => sendResponse({ ok: false }));
     return true;
