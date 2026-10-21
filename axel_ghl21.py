@@ -2151,7 +2151,7 @@ function requestAutoTokensForCurrentLocation(opts){
     if(pendingAutoTokenRequest !== requestId || activeTokenLocationId === locationId) return;
     pendingAutoTokenRequest = 0;
     setAutoTokenStatus('Não recebi resposta da extensão nesta aba. Abra o AXEL no mesmo perfil do Google Chrome onde a extensão foi instalada e confira se a versão 1.0.2 está ativa.');
-  }, 1600);
+  }, 3000);
 }
 
 function clearAutoTokenFields(){
@@ -2171,6 +2171,7 @@ window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
   const data = event.detail || {};
   const locationId = document.getElementById('location_id').value.trim();
   if(data.version !== 1 || data.requestId !== pendingAutoTokenRequest || data.locationId !== locationId) return;
+  pendingAutoTokenRequest = 0;
   if(data.extensionConnected === false){
     setAutoTokenStatus('A extensão não está ativa nesta aba. Abra o AXEL no mesmo perfil do Google Chrome onde ela foi instalada e tente novamente.');
     return;
