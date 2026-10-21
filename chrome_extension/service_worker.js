@@ -3,7 +3,8 @@
 const GHL_HOSTS = new Set([
   'app.gohighlevel.com',
   'app.msgsndr.com',
-  'app.leadconnectorhq.com'
+  'app.leadconnectorhq.com',
+  'app.grupohrz.com'
 ]);
 const AXEL_URL_PATTERNS = [
   'https://axel-ghl.onrender.com/*',
