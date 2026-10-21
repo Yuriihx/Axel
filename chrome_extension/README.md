@@ -3,7 +3,7 @@
 1. No AXEL, clique em **Baixar extensão atualizada do AXEL** e extraia o arquivo ZIP. Se já instalou uma versão antiga, substitua os arquivos e atualize/recarregue a extensão em `chrome://extensions`.
 2. No Chrome, abra `chrome://extensions` e ligue **Modo do desenvolvedor**.
 3. Clique em **Carregar sem compactação** e escolha a pasta `axel-chrome-extension` extraída. Se o Chrome pedir, permita o acesso ao endereço local do AXEL. Atualize a aba do AXEL.
-4. Mantenha o Chrome conectado ao AXEL e ao GHL. No GHL, abra a subconta e entre em **WhatsApp → Modelos**.
+4. Abra o AXEL e o GHL no mesmo perfil do Google Chrome onde a extensão foi instalada. No GHL, abra a subconta e entre em **WhatsApp → Modelos**.
 5. Volte ao AXEL e selecione a mesma subconta. Clique em **Pegar token** para buscar a captura feita pela extensão. Se necessário, também é possível preencher `Authorization` e `token-id` manualmente.
 
 A extensão aceita o AXEL hospedado e o AXEL local em `http://127.0.0.1:5057` ou `http://localhost:5057`.
