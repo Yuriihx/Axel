@@ -97,6 +97,42 @@ class FolderIsolationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.mock_network.assert_not_called()
 
+    def test_stale_optional_endpoints_do_not_block_listing_or_creation(self):
+        current = {'label': 'Nova', 'location_id': 'new-location', **self.config('new-location'),
+                   'folder_endpoints_configured': True}
+        current['folder_delete_url'] = self.config('old-location')['folder_delete_url']
+        current['move_url'] = 'https://example.test/locations/old-location/templates/{template_id}'
+        self.module.save_subaccounts({'antiga': self.original, 'nova': current})
+        payload = {'location_id': 'new-location', 'auth_token': 'fake-token', 'token_id': 'fake-id',
+                   'name': 'Folder', **self.config('new-location'),
+                   'folder_delete_url': current['folder_delete_url'], 'move_url': current['move_url']}
+        list_response = Mock(ok=True, status_code=200, text='{}')
+        list_response.json.return_value = {'folders': []}
+        with patch.object(self.module.requests, 'get', return_value=list_response):
+            listed = self.client.post('/api/list-folders', json=payload)
+        self.assertEqual(listed.status_code, 200)
+        self.assertTrue(listed.get_json()['ok'])
+        create_response = Mock(ok=True, status_code=200, text='{}')
+        create_response.json.return_value = {'folder': {'id': 'new-folder'}}
+        with patch.object(self.module.requests, 'post', return_value=create_response):
+            created = self.client.post('/api/create-folder', json=payload)
+        self.assertEqual(created.status_code, 200)
+        self.assertTrue(created.get_json()['ok'])
+        self.assertEqual(created.get_json()['id'], 'new-folder')
+        self.mock_network.assert_not_called()
+
+    def test_optional_action_still_rejects_foreign_endpoint(self):
+        current = {'label': 'Nova', 'location_id': 'new-location', **self.config('new-location'),
+                   'folder_endpoints_configured': True}
+        self.module.save_subaccounts({'antiga': self.original, 'nova': current})
+        payload = {'location_id': 'new-location', 'auth_token': 'fake-token', 'token_id': 'fake-id',
+                   'folder_id': 'folder', 'folder_delete_url': self.config('old-location')['folder_delete_url'],
+                   **{key: value for key, value in self.config('new-location').items() if key != 'folder_delete_url'}}
+        response = self.client.post('/api/delete-folder', json=payload)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('outro Location ID', response.get_json()['msg'])
+        self.mock_network.assert_not_called()
+
     def test_placeholder_urls_and_legacy_records_remain_usable(self):
         cfg = self.config('{location_id}')
         self.assertEqual(self.module.folder_config_issue(cfg, 'new-location', self.module.load_subaccounts()), '')
