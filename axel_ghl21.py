@@ -350,11 +350,16 @@ PAGE = """
   /* ---- botões ---- */
    .btn-item{border:1px solid var(--card-edge);border-radius:10px;padding:10px;margin-bottom:8px;background:#0b1512;transition:border-color .2s ease;}
   .btn-item:hover{border-color:var(--card-edge-hover);}
+  .btn-item.dragging{opacity:.45;}
+  .btn-item.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px rgba(32,211,153,.18);}
   .btn-item .bi-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
   .btn-item .bi-top .tag{flex-shrink:0;}
+  .btn-item .bi-drag-handle{width:auto;padding:3px 7px;color:var(--muted);cursor:grab;user-select:none;}
+  .btn-item .bi-drag-handle:active{cursor:grabbing;}
   .btn-item input{margin-bottom:8px;}
   .btn-item .bi-count{font-size:11px;color:var(--muted);margin-left:auto;}
   .btn-item .bi-del{width:auto;padding:4px 10px;font-size:12px;}
+  .btn-order-hint{font-size:11px;color:var(--muted);margin:-6px 0 10px;}
   .btn-rules{font-size:11px;color:var(--muted);margin:-6px 0 14px;}
   textarea#body_text{min-height:150px;}
 
@@ -768,6 +773,7 @@ Clique abaixo para ver mais detalhes!</textarea>
       <div class="hint">O corpo “Padrão” preenche o rodapé e os botões automaticamente. Você pode editar ou remover depois.</div>
 
       <label>Botões <span class="log-msg" id="buttonsCount"></span></label>
+      <div class="btn-order-hint">↕ Arraste pelo ícone ⠿ para mudar a ordem; as setas do teclado também funcionam.</div>
       <div id="buttonsList"></div>
       <div class="inline-row">
         <select id="addButtonType">
@@ -2966,6 +2972,21 @@ document.getElementById('mediaLinkInput').addEventListener('change', function(){
 const BUTTON_TEXT_PRESETS = ['Ver mais detalhes!', 'Cancelar avisos!'];
 const DEFAULT_BODY_FOOTER = 'Clique em "Cancelar avisos" e pare de receber mensagens.';
 let BUTTONS = [];
+let draggingButtonIndex = null;
+
+function resetButtonDragState(){
+  draggingButtonIndex = null;
+  document.querySelectorAll('#buttonsList .btn-item').forEach(row => row.classList.remove('dragging', 'drag-over'));
+}
+
+function moveButton(fromIndex, toIndex){
+  if(fromIndex < 0 || toIndex < 0 || fromIndex >= BUTTONS.length || toIndex >= BUTTONS.length || fromIndex === toIndex) return;
+  const [button] = BUTTONS.splice(fromIndex, 1);
+  BUTTONS.splice(toIndex, 0, button);
+  renderButtons();
+  renderPreview(true);
+  document.querySelectorAll('#buttonsList .bi-drag-handle')[toIndex]?.focus();
+}
 
 function syncButtonsJson(){
   document.getElementById('buttons_json').value = JSON.stringify(BUTTONS);
@@ -2987,6 +3008,7 @@ function renderButtons(){
     row.className = 'btn-item';
     const isUrl = b.type === 'URL';
     row.innerHTML = `<div class="bi-top">
+        <button type="button" class="btn ghost bi-drag-handle" draggable="true" aria-label="Arraste ou use as setas para mudar a ordem" title="Arraste para mudar a ordem">⠿</button>
         <span class="tag">${isUrl ? '🔗 Visitar site' : '↩ Resposta rápida'}</span>
         <span class="bi-count">${(b.text || '').length}/25</span>
         <button type="button" class="btn danger bi-del">Remover</button>
@@ -2998,6 +3020,34 @@ function renderButtons(){
       <input class="bi-text" maxlength="25" placeholder="${isUrl ? 'Texto do botão (ex: Acessar site)' : 'Texto do botão (ex: Ver mais detalhes!)'}" value="${escapeAttr(b.text || '')}">
       ${isUrl ? `<input class="bi-url" placeholder="https://www.seusite.com.br/promo" value="${escapeAttr(b.url || '')}">
       <input class="bi-ex" placeholder="Exemplo do link completo (só se usar {{'{{1}}'}})" value="${escapeAttr(b.example || '')}" style="display:${(b.url || '').includes('{{'{{1}}'}}') ? 'block' : 'none'};">` : ''}`;
+    const dragHandle = row.querySelector('.bi-drag-handle');
+    dragHandle.addEventListener('dragstart', event => {
+      draggingButtonIndex = i;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(i));
+      row.classList.add('dragging');
+    });
+    dragHandle.addEventListener('dragend', resetButtonDragState);
+    dragHandle.addEventListener('keydown', event => {
+      const target = event.key === 'ArrowUp' ? i - 1 : event.key === 'ArrowDown' ? i + 1 : i;
+      if(target !== i){ event.preventDefault(); moveButton(i, target); }
+    });
+    row.addEventListener('dragover', event => {
+      if(draggingButtonIndex === null || draggingButtonIndex === i) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      row.classList.add('drag-over');
+    });
+    row.addEventListener('dragleave', event => {
+      if(!row.contains(event.relatedTarget)) row.classList.remove('drag-over');
+    });
+    row.addEventListener('drop', event => {
+      if(draggingButtonIndex === null) return;
+      event.preventDefault();
+      const fromIndex = draggingButtonIndex;
+      resetButtonDragState();
+      moveButton(fromIndex, i);
+    });
     const preset = row.querySelector('.bi-preset');
     const textInput = row.querySelector('.bi-text');
     function updateButtonText(text){
