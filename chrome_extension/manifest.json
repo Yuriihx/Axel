@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "AXEL — captura automática do GHL",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Atualiza a sessão do AXEL ao usar Modelos de WhatsApp no GHL.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://app.gohighlevel.com/*",
     "https://app.msgsndr.com/*",
     "https://app.leadconnectorhq.com/*",
+    "https://app.grupohrz.com/*",
     "https://axel-ghl.onrender.com/*",
     "http://127.0.0.1/*",
     "http://localhost/*"
@@ -19,7 +20,8 @@
       "matches": [
         "https://app.gohighlevel.com/*",
         "https://app.msgsndr.com/*",
-        "https://app.leadconnectorhq.com/*"
+        "https://app.leadconnectorhq.com/*",
+        "https://app.grupohrz.com/*"
       ],
       "js": ["capture_main.js"],
       "run_at": "document_start",
@@ -29,7 +31,8 @@
       "matches": [
         "https://app.gohighlevel.com/*",
         "https://app.msgsndr.com/*",
-        "https://app.leadconnectorhq.com/*"
+        "https://app.leadconnectorhq.com/*",
+        "https://app.grupohrz.com/*"
       ],
       "js": ["ghl_relay.js"],
       "run_at": "document_start",
