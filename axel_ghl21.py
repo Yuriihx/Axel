@@ -2126,7 +2126,6 @@ const AUTO_TOKEN_RESPONSE_EVENT = 'axel-ghl-token-response';
 const AUTO_TOKEN_AVAILABLE_EVENT = 'axel-ghl-token-available';
 let autoTokenRequestSeq = 0;
 let pendingAutoTokenRequest = 0;
-let applyingAutoTokenResponse = false;
 
 function setAutoTokenStatus(message, kind){
   const el = document.getElementById('autoTokenStatus');
