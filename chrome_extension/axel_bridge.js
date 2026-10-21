@@ -24,12 +24,13 @@
         version: 1,
         requestId: data.requestId,
         locationId: data.locationId,
+        extensionConnected: true,
         ok: !!(reply && reply.ok),
         authToken: reply && reply.authToken || '',
         tokenId: reply && reply.tokenId || ''
       });
     } catch (_) {
-      emit(RESPONSE_EVENT, { version: 1, requestId: data.requestId, locationId: data.locationId, ok: false });
+      emit(RESPONSE_EVENT, { version: 1, requestId: data.requestId, locationId: data.locationId, extensionConnected: false, ok: false });
     }
   });
 
