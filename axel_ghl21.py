@@ -10,9 +10,11 @@ import threading
 import base64
 import time
 import unicodedata
+from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
 from datetime import datetime
 from urllib.parse import quote, urlsplit, parse_qsl, unquote
-from flask import Flask, request, render_template_string, jsonify
+from flask import Flask, request, render_template_string, jsonify, send_file
 
 import requests
 
@@ -524,7 +526,7 @@ PAGE = """
   setTimeout(hide, 2700);
 })();
 </script>
-<div id="expiredBanner" class="expired-banner" style="display:none;" title="Clique para ir às credenciais">⚠ TOKEN EXPIRADO — recapture no DevTools (F12 → Network) e cole de novo</div>
+<div id="expiredBanner" class="expired-banner" style="display:none;" title="Abra os modelos de WhatsApp no GHL para atualizar a sessão">⚠ SESSÃO EXPIRADA — abra os modelos de WhatsApp no GHL para atualizar automaticamente</div>
 <div class="wrap">
   <header class="area-head">
     <h1 class="axel">AXEL</h1>
@@ -553,21 +555,19 @@ PAGE = """
         <button class="btn ghost" type="button" id="saveSubaccountBtn" title="Salva nome + Location ID + endpoints de pasta">Salvar sub-conta</button>
       </div>
       <div id="subaccountLog" class="log-msg sub-log"></div>
-      <div class="hint">Salve uma vez com o nome. Depois é só selecionar a sub-conta e colar o <b>Authorization</b> e o <b>token-id</b>.<span id="subaccountFile"></span></div>
-
-      <label>Authorization (JWT, sem "Bearer")</label>
-      <input name="auth_token" value="{{ creds.auth_token or '' }}" placeholder="eyJhbGciOi...">
-      <label>token-id (segundo JWT)</label>
-      <input name="token_id" value="{{ creds.token_id or '' }}" placeholder="eyJhbGciOi...">
+      <div class="hint">Instale a extensão do Chrome uma vez e mantenha sua sessão do GHL aberta. Ao abrir Modelos de WhatsApp no GHL, o AXEL atualiza as credenciais desta subconta automaticamente. <a href="/download/chrome-extension.zip">Baixar extensão do AXEL</a><span id="subaccountFile"></span></div>
+      <div id="autoTokenStatus" class="conn-result" role="status" aria-live="polite">Instale a extensão do Chrome uma vez, atualize esta página e abra WhatsApp → Modelos no GHL para capturar a sessão.</div>
+      <input type="hidden" name="auth_token" value="">
+      <input type="hidden" name="token_id" value="">
 
       <div id="tokenTimer" class="token-timer idle">
         <div class="tt-top">
           <span class="tt-title">Token de sessão</span>
           <span class="tt-label" id="tokenTimerLabel">--:--</span>
-          <button class="btn small ghost" type="button" id="resetTimerBtn" style="margin-left:auto;">Reiniciar 1 h</button>
+          <button class="btn small ghost" type="button" id="resetTimerBtn" style="margin-left:auto;">Buscar sessão agora</button>
         </div>
         <div class="tt-bar"><div class="tt-fill" id="tokenTimerFill"></div></div>
-        <div class="tt-state" id="tokenTimerState">Cole os tokens de sessão para iniciar o timer de 1 hora.</div>
+        <div class="tt-state" id="tokenTimerState">Aguardando a captura automática pelo Chrome.</div>
         <div class="tt-note" id="tokenTimerNote"></div>
       </div>
 
@@ -575,7 +575,7 @@ PAGE = """
       <button class="btn ghost" type="button" id="testConnBtn">Testar conexão</button>
       <div id="connResult" class="conn-result"></div>
 
-      <div class="hint warn">O timer começa quando você cola um token novo. Se der 401, recapture no DevTools (F12 → Network → POST "template" → Headers) e cole de novo.</div>
+      <div class="hint warn">Se a sessão expirar, abra ou atualize a tela WhatsApp → Modelos no GHL. A extensão captura a nova sessão e o AXEL atualiza sozinho.</div>
     </div>
 
     <div class="panel area-model">
@@ -1272,7 +1272,7 @@ document.getElementById('templateForm').addEventListener('submit', async functio
 // ---------- Timer do token de sessão (1 hora) ----------
 
 const TOKEN_TTL_MS = 60 * 60 * 1000;  // 1 hora (Atualização 6)
-const TOKEN_TIMER_KEY = 'axel_token_timer';
+const TOKEN_TIMER_KEY = 'axel_token_timer_session';
 const ORIGINAL_TITLE = document.title;
 let tokenTimer = { fp: '', startedAt: 0, confirmedAt: 0 };
 
@@ -1288,11 +1288,11 @@ function tokenFingerprint(){
 function isSessionMode(){ return true; }
 
 function saveTokenTimer(){
-  try{ localStorage.setItem(TOKEN_TIMER_KEY, JSON.stringify({ fp: tokenTimer.fp, startedAt: tokenTimer.startedAt })); }catch(e){}
+  try{ sessionStorage.setItem(TOKEN_TIMER_KEY, JSON.stringify({ fp: tokenTimer.fp, startedAt: tokenTimer.startedAt })); }catch(e){}
 }
 
 function loadTokenTimer(){
-  try{ return JSON.parse(localStorage.getItem(TOKEN_TIMER_KEY) || 'null'); }catch(e){ return null; }
+  try{ return JSON.parse(sessionStorage.getItem(TOKEN_TIMER_KEY) || 'null'); }catch(e){ return null; }
 }
 
 function startTokenTimer(){
@@ -1359,7 +1359,7 @@ function tickTokenTimer(){
     box.className = 'token-timer idle';
     label.textContent = '--:--';
     fill.style.width = '0%';
-    state.textContent = 'Cole os tokens de sessão para iniciar o timer de 1 hora.';
+    state.textContent = 'Aguardando extensão. Abra WhatsApp → Modelos no GHL.';
     note.textContent = '';
     setExpiredUI(false);
     return;
@@ -1378,14 +1378,14 @@ function tickTokenTimer(){
   }else if(tokenTimer.confirmedAt && tokenTimer.confirmedAt >= expiresAt){
     box.className = 'token-timer warn';
     label.textContent = '00:00';
-    state.textContent = 'A 1 hora acabou, mas o teste de conexão às ' + formatHour(tokenTimer.confirmedAt) +
-      ' confirmou que o token ainda funciona. Recapture assim que puder.';
+    state.textContent = 'A estimativa de 1 hora passou, mas o teste às ' + formatHour(tokenTimer.confirmedAt) +
+      ' confirmou que a sessão ainda funciona. O AXEL pedirá uma nova captura quando necessário.';
     setExpiredUI(false);
   }else{
     box.className = 'token-timer expired';
     label.textContent = 'EXPIRADO';
-    state.textContent = 'Token expirado desde as ' + formatHour(expiresAt) +
-      '. Recapture no DevTools (F12 → Network) e cole de novo — o timer reinicia sozinho.';
+    state.textContent = 'Sessão expirada desde as ' + formatHour(expiresAt) +
+      '. Abra ou atualize WhatsApp → Modelos no GHL para renovar automaticamente.';
     setExpiredUI(true);
   }
 
@@ -1415,14 +1415,11 @@ function markTokenExpired(){
 
 
 document.getElementById('resetTimerBtn').addEventListener('click', async () => {
-  if(!tokenFingerprint()){ await axelAlert('Cole os tokens de sessão primeiro.'); return; }
-  startTokenTimer();
+  requestAutoTokensForCurrentLocation();
 });
 
 document.getElementById('expiredBanner').addEventListener('click', () => {
-  const el = document.getElementById('templateForm').elements['auth_token'];
-  if(el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  el.focus();
+  requestAutoTokensForCurrentLocation();
 });
 
 setInterval(tickTokenTimer, 1000);
@@ -1467,13 +1464,17 @@ document.getElementById('testConnBtn').addEventListener('click', async function(
 
 // ---------- Apagar modelos em lote ----------
 
+let activeTokenLocationId = '';
+
 function getCredsFromForm(){
   const form = document.getElementById('templateForm');
   const fd = new FormData(form);
+  const location_id = fd.get('location_id') || '';
+  const tokenMatchesLocation = activeTokenLocationId === String(location_id).trim();
   return {
-    location_id: fd.get('location_id') || '',
-    auth_token: fd.get('auth_token') || '',
-    token_id: fd.get('token_id') || '',
+    location_id,
+    auth_token: tokenMatchesLocation ? (fd.get('auth_token') || '') : '',
+    token_id: tokenMatchesLocation ? (fd.get('token_id') || '') : '',
   };
 }
 
@@ -2094,9 +2095,77 @@ function persistActiveSub(key){
   }).catch(() => {});
 }
 
+const AUTO_TOKEN_REQUEST_EVENT = 'axel-ghl-token-request';
+const AUTO_TOKEN_RESPONSE_EVENT = 'axel-ghl-token-response';
+const AUTO_TOKEN_AVAILABLE_EVENT = 'axel-ghl-token-available';
+let autoTokenRequestSeq = 0;
+let pendingAutoTokenRequest = 0;
+
+function setAutoTokenStatus(message, kind){
+  const el = document.getElementById('autoTokenStatus');
+  if(!el) return;
+  el.className = 'conn-result' + (kind ? ' ' + kind : '');
+  el.textContent = message;
+}
+
+function requestAutoTokensForCurrentLocation(opts){
+  opts = opts || {};
+  const locationId = document.getElementById('location_id').value.trim();
+  if(!locationId){
+    if(!opts.quiet) setAutoTokenStatus('Selecione ou informe a subconta para buscar a sessão automaticamente.');
+    return;
+  }
+  const requestId = ++autoTokenRequestSeq;
+  pendingAutoTokenRequest = requestId;
+  if(!opts.quiet) setAutoTokenStatus('Buscando a sessão desta subconta no Chrome…');
+  window.dispatchEvent(new CustomEvent(AUTO_TOKEN_REQUEST_EVENT, {
+    detail: { version: 1, requestId, locationId }
+  }));
+  setTimeout(() => {
+    if(pendingAutoTokenRequest !== requestId || activeTokenLocationId === locationId) return;
+    setAutoTokenStatus('Aguardando captura no GHL. Mantenha o Chrome conectado e abra WhatsApp → Modelos na subconta correspondente. Se a extensão ainda não estiver instalada, baixe-a acima e atualize esta página.');
+  }, 1600);
+}
+
+function clearAutoTokenFields(){
+  activeTokenLocationId = '';
+  const form = document.getElementById('templateForm');
+  ['auth_token', 'token_id'].forEach(name => {
+    const field = form.elements[name];
+    if(field && field.value){
+      field.value = '';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+  setAutoTokenStatus('Buscando a sessão da subconta selecionada no Chrome…');
+}
+
+window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
+  const data = event.detail || {};
+  const locationId = document.getElementById('location_id').value.trim();
+  if(data.version !== 1 || data.requestId !== pendingAutoTokenRequest || data.locationId !== locationId) return;
+  if(!data.ok || !data.authToken || !data.tokenId){
+    setAutoTokenStatus('Ainda não há uma sessão capturada para esta subconta. No GHL, abra WhatsApp → Modelos e aguarde a lista carregar.');
+    return;
+  }
+  const form = document.getElementById('templateForm');
+  activeTokenLocationId = locationId;
+  form.elements['auth_token'].value = String(data.authToken);
+  form.elements['token_id'].value = String(data.tokenId);
+  ['auth_token', 'token_id'].forEach(name => form.elements[name].dispatchEvent(new Event('input', { bubbles: true })));
+  setAutoTokenStatus('Sessão atualizada automaticamente para esta subconta pelo Chrome.', 'ok');
+});
+
+window.addEventListener(AUTO_TOKEN_AVAILABLE_EVENT, event => {
+  const data = event.detail || {};
+  if(data.version === 1 && data.locationId === document.getElementById('location_id').value.trim()){
+    requestAutoTokensForCurrentLocation({ quiet: true });
+  }
+});
+
 function hasSessionTokens(){
   const c = getCredsFromForm();
-  return !!(c.location_id.trim() && c.auth_token.trim() && c.token_id.trim());
+  return !!(c.location_id.trim() && activeTokenLocationId === c.location_id.trim() && c.auth_token.trim() && c.token_id.trim());
 }
 
 async function syncFoldersForActive(){
@@ -2105,7 +2174,7 @@ async function syncFoldersForActive(){
   const issue = folderContextIssue();
   if(issue){ setFolderSyncLog(issue, 'err'); return; }
   if(!hasSessionTokens()){
-    setFolderSyncLog('Sub-conta "' + s.label + '" sincronizada. Cole o Authorization e o token-id para listar as pastas.');
+    setFolderSyncLog('Sub-conta "' + s.label + '" sincronizada. Abra WhatsApp → Modelos no GHL para atualizar a sessão automaticamente.');
     return;
   }
   setFolderSyncLog('Sincronizando pastas de "' + s.label + '"...');
@@ -2130,6 +2199,7 @@ function scheduleFolderSync(){
 async function applySubaccount(key, opts){
   opts = opts || {};
   const s = SUBACCOUNTS.find(x => x.key === key) || null;
+  const previousLocationId = document.getElementById('location_id').value.trim();
   const changed = (s ? s.key : '') !== ACTIVE_SUB || folderConfigLocation !== String(s ? s.location_id : document.getElementById('location_id').value).trim();
   if(changed){ resetSubaccountScopedUI(); resetMediaChoice(); }
   ACTIVE_SUB = s ? s.key : '';
@@ -2142,6 +2212,7 @@ async function applySubaccount(key, opts){
     return;
   }
   document.getElementById('location_id').value = s.location_id || '';
+  if(previousLocationId !== String(s.location_id || '').trim() || activeTokenLocationId !== String(s.location_id || '').trim()) clearAutoTokenFields();
   document.getElementById('subaccountName').value = s.label || '';
   // Atualização 16.3: o nome base acompanha a sub-conta escolhida
   const baseInput = document.querySelector('[name="base_name"]');
@@ -2150,7 +2221,8 @@ async function applySubaccount(key, opts){
     baseInput.dispatchEvent(new Event('input', { bubbles: true }));
   }
   fillFolderConfig(s);
-  setSubaccountLog('Sub-conta "' + s.label + '" carregada — agora é só colar o Authorization e o token-id.', 'ok');
+  setSubaccountLog('Sub-conta "' + s.label + '" carregada — aguardando a sessão automática do Chrome.', 'ok');
+  requestAutoTokensForCurrentLocation({ quiet: true });
   if(typeof checkTokensSoon === 'function') checkTokensSoon(0);
   const folderIssue = folderContextIssue();
   if(folderIssue) setFolderSyncLog(folderIssue, 'err');
@@ -2184,6 +2256,7 @@ async function initSubaccounts(){
   let pick = SUBACCOUNTS.find(s => s.key === data.active);
   if(!pick && loc) pick = SUBACCOUNTS.find(s => s.location_id === loc);
   if(pick) await applySubaccount(pick.key, { persist: false });
+  else if(loc) requestAutoTokensForCurrentLocation({ quiet: true });
   if(data.recovered && data.recovered.length){
     setSubaccountLog('Recuperado de versões antigas: ' + data.recovered.join(' · '), 'ok');
   }
@@ -2194,12 +2267,16 @@ async function initSubaccounts(){
 });
 
 // Invalidate folder state as soon as the destination changes, before blur or save.
-document.getElementById('location_id').addEventListener('input', detachFolderContext);
+document.getElementById('location_id').addEventListener('input', function(){
+  detachFolderContext();
+  if(activeTokenLocationId && activeTokenLocationId !== this.value.trim()) clearAutoTokenFields();
+});
 document.getElementById('location_id').addEventListener('change', function(){
   const loc = this.value.trim();
   const match = SUBACCOUNTS.find(s => s.location_id === loc);
   if(match){ applySubaccount(match.key); return; }
   detachFolderContext();
+  requestAutoTokensForCurrentLocation({ quiet: true });
 });
 
 document.getElementById('saveSubaccountBtn').addEventListener('click', async function(){
@@ -2742,7 +2819,7 @@ function renderMediaList(){
 async function loadMediaLibrary(){
   const creds = getCredsFromForm();
   if(!creds.location_id || !creds.auth_token || !creds.token_id){
-    setMediaLog('Preencha o Location ID e cole os tokens antes de abrir o armazenamento.', 'err');
+    setMediaLog('Selecione a subconta e abra WhatsApp → Modelos no GHL para capturar a sessão automaticamente.', 'err');
     return;
   }
   setMediaLog('Buscando mídias da sub-conta...');
@@ -2767,7 +2844,7 @@ async function uploadMediaFile(file){
   if(file.size > limits[t] * 1024 * 1024){ setMediaLog('Arquivo maior que ' + limits[t] + ' MB (limite da Meta).', 'err'); return; }
   const creds = getCredsFromForm();
   if(!creds.location_id || !creds.auth_token || !creds.token_id){
-    setMediaLog('Preencha o Location ID e cole os tokens antes de enviar a mídia.', 'err');
+    setMediaLog('Selecione a subconta e abra WhatsApp → Modelos no GHL para capturar a sessão automaticamente.', 'err');
     return;
   }
   const fd = new FormData();
@@ -3310,7 +3387,21 @@ def write_store(path, data):
 
 
 def load_creds():
-    return read_store(CREDS_FILE)
+    data = read_store(CREDS_FILE)
+    stale_tokens = any(key in data for key in ("auth_token", "token_id"))
+    if stale_tokens:
+        data.pop("auth_token", None)
+        data.pop("token_id", None)
+        try:
+            write_store(CREDS_FILE, data)
+            # A backup of the previous file would otherwise retain the old
+            # session credentials after this migration.
+            os.remove(CREDS_FILE + ".bak")
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            print(f"[AXEL] aviso: não consegui remover tokens antigos salvos ({e})")
+    return data
 
 
 def save_creds(data):
@@ -3319,6 +3410,8 @@ def save_creds(data):
     with _STORE_LOCK:
         merged = load_creds()
         merged.update(data)
+        merged.pop("auth_token", None)
+        merged.pop("token_id", None)
         merged.pop("auth_mode", None)   # modo PIT foi removido (Atualização 7)
         merged.pop("pit_token", None)
         try:
@@ -3729,7 +3822,7 @@ def inspect_tokens(creds, subaccounts=None):
     if c["swapped"]:
         info["notes"].append("Authorization e token-id estavam trocados — o AXEL destrocou sozinho.")
     if info["expired"]:
-        info["problems"].append("Token vencido (" + " e ".join(info["expired"]) + ") — recapture no DevTools.")
+        info["problems"].append("Token vencido (" + " e ".join(info["expired"]) + ") — abra WhatsApp → Modelos no GHL para atualizar a sessão automaticamente.")
 
     subs = subaccounts if subaccounts is not None else {}
     if scope_id:
@@ -3752,7 +3845,7 @@ def inspect_tokens(creds, subaccounts=None):
 def explain_403(diag):
     """Texto do 403 com a causa mais provável, sem bloquear nada antes."""
     if diag.get("expired"):
-        return "o token venceu (" + " e ".join(diag["expired"]) + ") — recapture no DevTools."
+        return "o token venceu (" + " e ".join(diag["expired"]) + ") — abra WhatsApp → Modelos no GHL para atualizar a sessão automaticamente."
     if diag.get("mismatch"):
         onde = f' ("{diag["token_subaccount"]}")' if diag.get("token_subaccount") else ""
         return (f"esse Authorization foi capturado DENTRO da sub-conta {diag['token_location']}{onde} e o GHL "
@@ -4002,6 +4095,24 @@ def index():
                                   max_qty=MAX_QTY)
 
 
+@app.route("/download/chrome-extension.zip", methods=["GET"])
+def download_chrome_extension():
+    extension_dir = os.path.join(BASE_DIR, "chrome_extension")
+    files = (
+        "manifest.json", "capture_main.js", "ghl_relay.js", "axel_bridge.js",
+        "service_worker.js", "popup.html", "popup.css", "popup.js", "README.md",
+    )
+    archive = BytesIO()
+    with ZipFile(archive, "w", ZIP_DEFLATED) as zipped:
+        for name in files:
+            path = os.path.join(extension_dir, name)
+            if os.path.isfile(path):
+                zipped.write(path, arcname="axel-chrome-extension/" + name)
+    archive.seek(0)
+    return send_file(archive, mimetype="application/zip", as_attachment=True,
+                     download_name="axel-chrome-extension.zip", max_age=0)
+
+
 @app.route("/api/plan", methods=["POST"])
 def api_plan():
     """Descobre quais índices (v1, v2, v3...) já existem na sub-conta e
@@ -4067,7 +4178,7 @@ def api_list_templates():
             "ok": False,
             "templates": [],
             "error": "Não foi possível consultar os modelos. Confira as credenciais "
-                     "(token pode ter expirado — recapture no DevTools) e tente de novo.",
+                     "(a sessão pode ter expirado — abra WhatsApp → Modelos no GHL para atualizar automaticamente) e tente de novo.",
         })
     return jsonify({"ok": True, "templates": items})
 
@@ -4097,7 +4208,7 @@ def api_test_connection():
     if not creds["location_id"].strip():
         return jsonify({"ok": False, "status": 0, "msg": "Preencha o Location ID."})
     if not creds["auth_token"].strip() or not creds["token_id"].strip():
-        return jsonify({"ok": False, "status": 0, "msg": "Cole o Authorization e o token-id."})
+        return jsonify({"ok": False, "status": 0, "msg": "Abra WhatsApp → Modelos no GHL para capturar a sessão automaticamente."})
 
     save_creds(creds)
     url = ENDPOINT_TEMPLATE.format(location_id=creds["location_id"].strip())
@@ -4130,7 +4241,7 @@ def api_test_connection():
     if res.status_code == 403:
         msg = "Acesso negado (HTTP 403): " + explain_403(diag)
     elif res.status_code == 401:
-        msg = "Token expirado ou inválido (HTTP 401) — recapture no DevTools."
+        msg = "Token expirado ou inválido (HTTP 401) — abra WhatsApp → Modelos no GHL para atualizar automaticamente."
     elif res.status_code == 404:
         msg = "Não encontrado (HTTP 404) — confira o Location ID."
     else:
@@ -4355,7 +4466,7 @@ def api_create_folder():
                     "DevTools aberto (F12 → Network), copie a URL da requisição e cole em "
                     "'Endpoints de pasta (avançado)'.")
         elif res.status_code == 401:
-            hint = "\n\nToken expirado — recapture no DevTools."
+            hint = "\n\nSessão expirada — abra WhatsApp → Modelos no GHL para atualizar automaticamente."
         return jsonify({"ok": False, "name": name, "msg": f"HTTP {res.status_code}",
                         "detail": res.text[:800] + hint})
 
@@ -4400,7 +4511,7 @@ def delete_one_folder(creds, cfg, folder_id, name=""):
                     "com o DevTools aberto (F12 → Network), copie a URL da requisição e "
                     "cole em 'Endpoints de pasta (avançado) → Apagar pasta'.")
         elif res.status_code == 401:
-            hint = "\n\nToken expirado — recapture no DevTools."
+            hint = "\n\nSessão expirada — abra WhatsApp → Modelos no GHL para atualizar automaticamente."
         return {"id": folder_id, "name": name, "ok": False,
                 "msg": f"HTTP {res.status_code}", "detail": res.text[:800] + hint}
     except Exception as e:
@@ -4475,7 +4586,7 @@ def move_one_template(creds, cfg, template_id, name, folder_id):
                 "DevTools aberto (F12 → Network), copie método, URL e corpo da requisição e "
                 "cole em 'Pastas → Endpoints (avançado) → Mover modelo'.")
     elif res.status_code == 401:
-        hint = "\n\nToken expirado — recapture no DevTools."
+        hint = "\n\nSessão expirada — abra WhatsApp → Modelos no GHL para atualizar automaticamente."
     return {"id": template_id, "name": name, "ok": False,
             "msg": f"HTTP {res.status_code}", "detail": res.text[:800] + hint}
 
@@ -4765,7 +4876,7 @@ def api_upload_media():
                     "DevTools aberto (F12 → Network), copie a URL da requisição e cole em "
                     "'Cabeçalho → Mídia (avançado) → Enviar mídia'. Ou use a opção 'Colar link'.")
         elif res.status_code == 401:
-            hint = "\n\nToken expirado — recapture no DevTools."
+            hint = "\n\nSessão expirada — abra WhatsApp → Modelos no GHL para atualizar automaticamente."
         return jsonify({"ok": False, "msg": f"HTTP {res.status_code}", "detail": res.text[:600] + hint})
     try:
         body = res.json()
