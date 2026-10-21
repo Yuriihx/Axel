@@ -555,7 +555,7 @@ PAGE = """
         <button class="btn ghost" type="button" id="saveSubaccountBtn" title="Salva nome + Location ID + endpoints de pasta">Salvar sub-conta</button>
       </div>
       <div id="subaccountLog" class="log-msg sub-log"></div>
-      <div class="hint">Mantenha a sessão do GHL aberta. Ao abrir WhatsApp → Modelos, a extensão captura a sessão para esta subconta. <a href="/download/chrome-extension.zip">Baixar extensão atualizada do AXEL</a><span id="subaccountFile"></span></div>
+      <div class="hint">Mantenha o GHL e o AXEL abertos no mesmo perfil do Google Chrome onde a extensão foi instalada. No GHL, abra WhatsApp → Modelos para capturar a sessão para esta subconta. <a href="/download/chrome-extension.zip">Baixar extensão atualizada do AXEL</a><span id="subaccountFile"></span></div>
       <div class="inline-row">
         <button class="btn ghost" type="button" id="getAutoTokenBtn">Pegar token</button>
         <span class="hint">Busca na extensão a sessão já capturada no GHL.</span>
@@ -2149,7 +2149,8 @@ function requestAutoTokensForCurrentLocation(opts){
   }));
   setTimeout(() => {
     if(pendingAutoTokenRequest !== requestId || activeTokenLocationId === locationId) return;
-    setAutoTokenStatus('Nenhuma sessão encontrada ainda. No GHL, abra WhatsApp → Modelos, aguarde carregar e clique em Pegar token. Se preferir, cole Authorization e token-id manualmente abaixo.');
+    pendingAutoTokenRequest = 0;
+    setAutoTokenStatus('Não recebi resposta da extensão nesta aba. Abra o AXEL no mesmo perfil do Google Chrome onde a extensão foi instalada e confira se a versão 1.0.2 está ativa.');
   }, 1600);
 }
 
@@ -2170,8 +2171,12 @@ window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
   const data = event.detail || {};
   const locationId = document.getElementById('location_id').value.trim();
   if(data.version !== 1 || data.requestId !== pendingAutoTokenRequest || data.locationId !== locationId) return;
+  if(data.extensionConnected === false){
+    setAutoTokenStatus('A extensão não está ativa nesta aba. Abra o AXEL no mesmo perfil do Google Chrome onde ela foi instalada e tente novamente.');
+    return;
+  }
   if(!data.ok || !data.authToken || !data.tokenId){
-    setAutoTokenStatus('Ainda não há sessão capturada para esta subconta. Abra WhatsApp → Modelos no GHL e tente novamente, ou preencha os dois campos manualmente.');
+    setAutoTokenStatus('A extensão está conectada, mas ainda não capturou esta subconta. No mesmo Chrome, abra GHL → subconta correspondente → WhatsApp → Modelos, aguarde carregar e tente novamente.');
     return;
   }
   const form = document.getElementById('templateForm');
