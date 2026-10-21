@@ -6,6 +6,7 @@ const path = require('node:path');
 const data = {};
 let messageListener;
 let notified = [];
+let queriedFilters = [];
 const chrome = {
   storage: {
     session: {
@@ -26,7 +27,7 @@ const chrome = {
     getURL(path) { return `chrome-extension://test/${path}`; }
   },
   tabs: {
-    async query() { return [{ id: 2 }]; },
+    async query(filter) { queriedFilters.push(filter); return [{ id: 2 }]; },
     async sendMessage(tabId, message) { notified.push({ tabId, message }); }
   }
 };
@@ -60,6 +61,11 @@ async function main() {
   assert.ok(data[`token:${locationId}`], 'valid GHL template calls are saved in session storage');
   assert.equal(notified[0].message.type, 'TOKEN_AVAILABLE');
   assert.equal(notified[0].message.locationId, locationId);
+  assert.equal(JSON.stringify(queriedFilters[0].url), JSON.stringify([
+    'https://axel-ghl.onrender.com/*',
+    'http://127.0.0.1/*',
+    'http://localhost/*'
+  ]), 'captured sessions notify the hosted and local AXEL tabs');
 
   messageListener({
     type: 'CAPTURE_TOKENS', locationId, requestUrl: requestUrl.replace('/template', '/folder'),
@@ -80,6 +86,16 @@ async function main() {
   assert.equal(result.response.authToken, authToken);
   assert.equal(result.response.tokenId, tokenId);
 
+  const localResult = await send({ type: 'GET_TOKENS', locationId }, {
+    frameId: 0, tab: { url: 'http://127.0.0.1:5057/' }
+  });
+  assert.equal(localResult.response.authToken, authToken, 'the local AXEL app can request captured tokens');
+
+  const wrongPort = await send({ type: 'GET_TOKENS', locationId }, {
+    frameId: 0, tab: { url: 'http://127.0.0.1:5058/' }
+  });
+  assert.equal(wrongPort.response, undefined, 'other local ports cannot request captured tokens');
+
   const denied = await send({ type: 'GET_TOKENS', locationId }, {
     frameId: 0, tab: { url: 'https://example.com/' }
   });
@@ -88,4 +104,3 @@ async function main() {
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });
-
