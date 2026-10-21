@@ -45,6 +45,13 @@ const ghlSender = {
   tab: { url: 'https://app.gohighlevel.com/v2/location/abc/whatsapp' }
 };
 
+const brandedLocationId = 'Qr7xM4nP9bV2kL6wC8dH';
+const brandedRequestUrl = `https://backend.leadconnectorhq.com/phone-system/whatsapp/location/${brandedLocationId}/template`;
+const brandedSender = {
+  frameId: 0,
+  tab: { url: 'https://app.grupohrz.com/v2/location/abc/settings/whatsapp?tab=templates' }
+};
+
 async function send(message, sender) {
   let response;
   const asyncResponse = messageListener(message, sender, value => { response = value; });
@@ -61,6 +68,13 @@ async function main() {
   assert.ok(data[`token:${locationId}`], 'valid GHL template calls are saved in session storage');
   assert.equal(notified[0].message.type, 'TOKEN_AVAILABLE');
   assert.equal(notified[0].message.locationId, locationId);
+
+  messageListener({
+    type: 'CAPTURE_TOKENS', locationId: brandedLocationId, requestUrl: brandedRequestUrl,
+    authToken, tokenId
+  }, brandedSender, () => {});
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.ok(data[`token:${brandedLocationId}`], 'the white-label GHL domain can capture its template session');
   assert.equal(JSON.stringify(queriedFilters[0].url), JSON.stringify([
     'https://axel-ghl.onrender.com/*',
     'http://127.0.0.1/*',
@@ -76,7 +90,7 @@ async function main() {
     authToken, tokenId
   }, { ...ghlSender, tab: { url: 'https://example.com/' } }, () => {});
   await new Promise(resolve => setTimeout(resolve, 0));
-  assert.equal(Object.keys(data).filter(key => key.startsWith('token:')).length, 1,
+  assert.equal(Object.keys(data).filter(key => key.startsWith('token:')).length, 2,
     'other endpoints and page origins are rejected');
 
   const result = await send({ type: 'GET_TOKENS', locationId }, {
