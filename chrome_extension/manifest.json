@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AXEL — captura automática do GHL",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Atualiza a sessão do AXEL ao usar Modelos de WhatsApp no GHL.",
   "permissions": ["storage"],
   "host_permissions": [
