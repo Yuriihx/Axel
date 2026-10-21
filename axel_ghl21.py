@@ -1782,7 +1782,7 @@ document.getElementById('moveSelectedBtn').addEventListener('click', async funct
     await axelAlert('Selecione ao menos um modelo pra mover.');
     return;
   }
-  const issue = folderContextIssue();
+  const issue = folderContextIssue(['move_url']);
   if(issue){ await axelAlert(issue); openFolderEndpoints(); return; }
   const cfg = getFolderConfig();
   if(!cfg.move_url.trim()){ await axelAlert('O endpoint para mover modelos é opcional. Configure a URL em Pastas → Endpoints (avançado) para usar esta ação.'); openFolderEndpoints(); return; }
@@ -1918,10 +1918,10 @@ let folderContextVersion = 0;
 let folderConfigLocation = '';
 
 // Folder settings belong to the exact Location ID currently being edited.
-function folderConfigIssue(cfg, locationId){
+function folderConfigIssue(cfg, locationId, optionalEndpoints=['folder_delete_url', 'move_url']){
   const required = ['folder_create_url', 'folder_list_url'];
   if(required.some(key => !String(cfg[key] || '').trim())) return 'Faltam os endpoints obrigatórios de criar e listar pastas desta subconta.';
-  for(const key of required.concat(['folder_delete_url', 'move_url'])){
+  for(const key of required.concat(optionalEndpoints)){
     const value = String(cfg[key] || '').trim();
     if(!value) continue;
     let url;
@@ -1939,13 +1939,13 @@ function folderConfigIssue(cfg, locationId){
   return '';
 }
 
-function folderContextIssue(){
+function folderContextIssue(optionalEndpoints=[]){
   const locationId = document.getElementById('location_id').value.trim();
   if(!locationId) return 'Preencha o Location ID antes de configurar as pastas.';
   const sub = activeSub();
   if(folderConfigLocation !== locationId || (sub && sub.location_id !== locationId)) return 'A configuração de pastas não pertence ao Location ID atual.';
   if(sub && sub.folder_endpoints_configured === false) return 'Faltam os endpoints de pastas da subconta "' + sub.label + '". Preencha a seção abaixo e clique em "Salvar endpoints".';
-  return folderConfigIssue(getFolderConfig(), locationId);
+  return folderConfigIssue(getFolderConfig(), locationId, optionalEndpoints);
 }
 
 function openFolderEndpoints(){
@@ -2405,7 +2405,7 @@ async function deleteFolder(id, name, row){
   const contextVersion = folderContextVersion;
   if(!await axelConfirm(`Apagar a pasta "${name}"? Essa ação não pode ser desfeita.`)) return;
   if(contextVersion !== folderContextVersion) return;
-  const issue = folderContextIssue();
+  const issue = folderContextIssue(['folder_delete_url']);
   if(issue){ await axelAlert(issue); return; }
   const cfg = getFolderConfig();
   if(!cfg.folder_delete_url.trim()){ await axelAlert('O endpoint para apagar pastas é opcional. Configure a URL em Pastas → Endpoints (avançado) para habilitar esta ação.'); openFolderEndpoints(); return; }
@@ -4330,14 +4330,14 @@ def folder_configuration_error(error):
     return jsonify(ok=False, msg=str(error), error=str(error), folders=[]), 400
 
 
-def folder_config_issue(cfg, location_id, subaccounts):
+def folder_config_issue(cfg, location_id, subaccounts, optional_endpoints=('folder_delete_url', 'move_url')):
     required = ('folder_create_url', 'folder_list_url')
     if not location_id:
         return 'Preencha o Location ID da subconta.'
     if any(not str(cfg.get(key) or '').strip() for key in required):
         return 'Faltam os endpoints obrigatórios de criar e listar pastas desta subconta. Preencha e clique em Salvar endpoints.'
     foreign_ids = {str(s.get('location_id') or '').strip() for s in subaccounts.values() if isinstance(s, dict)} - {'', location_id}
-    for key in (*required, 'folder_delete_url', 'move_url'):
+    for key in (*required, *optional_endpoints):
         value = str(cfg.get(key) or '').strip()
         if not value:
             continue
@@ -4358,7 +4358,7 @@ def folder_config_issue(cfg, location_id, subaccounts):
     return ''
 
 
-def folder_config_from_request(data):
+def folder_config_from_request(data, optional_endpoints=('folder_delete_url', 'move_url')):
     cfg = {
         'folder_create_url': str(data.get('folder_create_url') or '').strip(),
         'folder_list_url': str(data.get('folder_list_url') or '').strip(),
@@ -4374,7 +4374,7 @@ def folder_config_from_request(data):
     saved = [s for s in subs.values() if isinstance(s, dict) and s.get('location_id') == location_id]
     if saved and all(s.get('folder_endpoints_configured') is False for s in saved):
         raise FolderConfigurationError('Faltam os endpoints de pastas desta subconta. Configure e clique em Salvar endpoints antes de continuar.')
-    issue = folder_config_issue(cfg, location_id, subs)
+    issue = folder_config_issue(cfg, location_id, subs, optional_endpoints)
     if issue:
         raise FolderConfigurationError(issue)
     return cfg
@@ -4480,7 +4480,7 @@ def extract_folder_list(data):
 def api_create_folder():
     data = request.get_json(force=True)
     creds = creds_from_request(data)
-    cfg = folder_config_from_request(data)
+    cfg = folder_config_from_request(data, optional_endpoints=())
     save_folder_request_creds(creds, cfg)
 
     name = (data.get("name") or "").strip()
@@ -4559,7 +4559,7 @@ def delete_one_folder(creds, cfg, folder_id, name=""):
 def api_delete_folder():
     data = request.get_json(force=True)
     creds = creds_from_request(data)
-    cfg = folder_config_from_request(data)
+    cfg = folder_config_from_request(data, optional_endpoints=('folder_delete_url',))
     save_folder_request_creds(creds, cfg)
 
     folder_id = (data.get("folder_id") or data.get("id") or "").strip()
@@ -4632,7 +4632,7 @@ def move_one_template(creds, cfg, template_id, name, folder_id):
 def api_move_template():
     data = request.get_json(force=True)
     creds = creds_from_request(data)
-    cfg = folder_config_from_request(data)
+    cfg = folder_config_from_request(data, optional_endpoints=('move_url',))
     save_folder_request_creds(creds, cfg)
 
     template_id = str(data.get("id") or "").strip()
@@ -4653,7 +4653,7 @@ def api_move_template():
 def api_list_folders():
     data = request.get_json(force=True)
     creds = creds_from_request(data)
-    cfg = folder_config_from_request(data)
+    cfg = folder_config_from_request(data, optional_endpoints=())
     save_folder_request_creds(creds, cfg)
 
     url = fill_location(cfg["folder_list_url"], creds["location_id"])
