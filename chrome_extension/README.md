@@ -1,5 +1,7 @@
 # Extensão do Chrome para o AXEL
 
+A captura também funciona no domínio GHL personalizado `app.grupohrz.com`.
+
 1. No AXEL, clique em **Baixar extensão atualizada do AXEL** e extraia o arquivo ZIP. Se já instalou uma versão antiga, substitua os arquivos e atualize/recarregue a extensão em `chrome://extensions`.
 2. No Chrome, abra `chrome://extensions` e ligue **Modo do desenvolvedor**.
 3. Clique em **Carregar sem compactação** e escolha a pasta `axel-chrome-extension` extraída. Se o Chrome pedir, permita o acesso ao endereço local do AXEL. Atualize a aba do AXEL.
