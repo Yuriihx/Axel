@@ -1,9 +1,11 @@
 {
   "manifest_version": 3,
   "name": "AXEL — captura automática do GHL",
-  "version": "1.0.4",
-  "description": "Captura e permite reutilizar a sessão do GHL entre subcontas acessíveis no AXEL.",
-  "permissions": ["storage"],
+  "version": "1.0.5",
+  "description": "Captura a sessão do GHL para o AXEL em navegadores Chromium, incluindo Chrome e Opera.",
+  "permissions": [
+    "storage"
+  ],
   "host_permissions": [
     "https://app.gohighlevel.com/*",
     "https://app.msgsndr.com/*",
@@ -13,8 +15,13 @@
     "http://127.0.0.1/*",
     "http://localhost/*"
   ],
-  "background": { "service_worker": "service_worker.js" },
-  "action": { "default_popup": "popup.html", "default_title": "AXEL — captura automática" },
+  "background": {
+    "service_worker": "service_worker.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AXEL — captura automática"
+  },
   "content_scripts": [
     {
       "matches": [
@@ -23,7 +30,9 @@
         "https://app.leadconnectorhq.com/*",
         "https://app.grupohrz.com/*"
       ],
-      "js": ["capture_main.js"],
+      "js": [
+        "capture_main.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     },
@@ -34,7 +43,9 @@
         "https://app.leadconnectorhq.com/*",
         "https://app.grupohrz.com/*"
       ],
-      "js": ["ghl_relay.js"],
+      "js": [
+        "ghl_relay.js"
+      ],
       "run_at": "document_start",
       "world": "ISOLATED"
     },
@@ -44,7 +55,9 @@
         "http://127.0.0.1/*",
         "http://localhost/*"
       ],
-      "js": ["axel_bridge.js"],
+      "js": [
+        "axel_bridge.js"
+      ],
       "run_at": "document_start",
       "world": "ISOLATED"
     }
