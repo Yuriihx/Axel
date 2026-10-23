@@ -10,7 +10,7 @@ async function refresh() {
   const accounts = result && Array.isArray(result.accounts) ? result.accounts : [];
   list.replaceChildren();
   if (!accounts.length) {
-    statusEl.textContent = 'Nenhuma sessão capturada nesta janela do Chrome. Abra WhatsApp → Modelos no GHL.';
+    statusEl.textContent = 'Nenhuma sessão capturada nesta janela do navegador. Abra WhatsApp → Modelos no GHL.';
     return;
   }
   statusEl.textContent = `Sessões temporárias disponíveis: ${accounts.length}.`;
