@@ -2727,15 +2727,18 @@ function checkVars(){
   const nums = new Set();
   const re = /\\{\\{(\\d+)\\}\\}/g;
   let m;
-  while((m = re.exec(body)) !== null) nums.add(m[1]);
-  const nBody = nums.size;
+  while((m = re.exec(body)) !== null) nums.add(Number(m[1]));
+  const order = [...nums].sort((a, b) => a - b);
+  const nBody = order.length;
+  const renumbered = order.some((n, i) => n !== i + 1);
   const nFields = splitList(document.getElementById('contact_vars').value).length;
   const nEx = splitList(document.getElementById('example_vars').value).length;
   if(nBody === 0){
     return { mismatch: false, cls: '', text: 'O corpo não usa variáveis — campos e exemplos serão ignorados.' };
   }
   if(nFields === nBody && nEx === nBody){
-    return { mismatch: false, cls: 'ok', text: '✓ Corpo usa ' + nBody + ' variável(is) · ' + nFields + ' campo(s) · ' + nEx + ' exemplo(s).' };
+    return { mismatch: false, cls: 'ok', text: '✓ Corpo usa ' + nBody + ' variável(is) · ' + nFields + ' campo(s) · ' + nEx + ' exemplo(s).' +
+      (renumbered ? ' · numeração ajustada automaticamente na criação.' : '') };
   }
   return { mismatch: true, cls: 'warn',
     text: '⚠ O corpo usa ' + nBody + ' variável(is), mas há ' + nFields + ' campo(s) e ' + nEx +
@@ -3220,12 +3223,15 @@ function previewBodyText(){
   if(formVal('use_salutation_rotation') === 'true') body = applySalutation(body, SALUTATIONS[0]);
   const examples = splitList(formVal('example_vars'));
   const fields = splitList(formVal('contact_vars'));
+  const tokenOrder = [...new Set((body.match(/\\{\\{\\d+\\}\\}/g) || []).map(token => Number(token.slice(2, -2))))].sort((a, b) => a - b);
+  const tokenIndexes = new Map(tokenOrder.map((token, index) => [token, index]));
   let html = escapeHtml(body);
   const missing = [];
   html = html.replace(/\\{\\{(\\d+)\\}\\}/g, (m, n) => {
-    const ex = examples[parseInt(n, 10) - 1];
+    const index = tokenIndexes.get(Number(n));
+    const ex = examples[index];
     if(ex === undefined){ missing.push(n); return '<span class="wa-var" title="sem exemplo">' + VO + n + VC + '</span>'; }
-    const field = fields[parseInt(n, 10) - 1];
+    const field = fields[index];
     return '<span class="wa-var" title="' + VO + n + VC + ' → ' + escapeAttr(field ? 'contact.' + field : 'sem campo') + '">' + escapeHtml(ex) + '</span>';
   });
   return { html: waFormat(html), length: body.length, missing };
@@ -3782,11 +3788,22 @@ def build_components(form):
     if header:
         components.append(header)
 
-    var_matches = sorted(set(re.findall(r"\{\{(\d+)\}\}", body)))
+    variable_numbers = sorted({int(value) for value in re.findall(r"\{\{(\d+)\}\}", body)})
+    variable_indexes = {number: index + 1 for index, number in enumerate(variable_numbers)}
+    body = re.sub(
+        r"\{\{(\d+)\}\}",
+        lambda match: "{{" + str(variable_indexes[int(match.group(1))]) + "}}",
+        body,
+    )
     body_component = {"type": "BODY", "text": body}
-    if var_matches:
+    if variable_numbers:
         fields = [f for f in normalize_list_text(form.get("contact_vars", "")).split(", ") if f]
         examples = [e for e in normalize_list_text(form.get("example_vars", "")).split(", ") if e]
+        if len(fields) != len(variable_numbers) or len(examples) != len(variable_numbers):
+            raise TemplateInputError(
+                f"o corpo usa {len(variable_numbers)} variável(is), mas há {len(fields)} campo(s) de contato "
+                f"e {len(examples)} exemplo(s); use a mesma quantidade"
+            )
         if fields:
             body_component["customVariables"] = [f"{{{{contact.{f}}}}}" for f in fields]
         if examples:
