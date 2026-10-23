@@ -560,7 +560,7 @@ PAGE = """
         <button class="btn ghost" type="button" id="saveSubaccountBtn" title="Salva nome + Location ID + endpoints de pasta">Salvar sub-conta</button>
       </div>
       <div id="subaccountLog" class="log-msg sub-log"></div>
-      <div class="hint">Mantenha o GHL e o AXEL abertos no mesmo perfil do Google Chrome onde a extensão foi instalada. Abra WhatsApp → Modelos para capturar os tokens; o par pode ser reutilizado nas subcontas acessíveis, alterando o Location ID. <a href="/download/chrome-extension.zip">Baixar extensão atualizada do AXEL</a><span id="subaccountFile"></span></div>
+      <div class="hint">Mantenha GHL e AXEL no mesmo navegador. Ao abrir WhatsApp → Modelos, a extensão captura os tokens; o par pode ser reutilizado nas subcontas acessíveis, alterando o Location ID. <a href="/download/chrome-extension.zip">Baixar para Chrome</a> · <a href="/download/opera-extension.zip">Baixar para Opera</a><span id="subaccountFile"></span></div>
       <div class="inline-row">
         <button class="btn ghost" type="button" id="getAutoTokenBtn">Pegar token</button>
         <span class="hint">Busca na extensão a sessão já capturada no GHL.</span>
@@ -578,7 +578,7 @@ PAGE = """
           <button class="btn small ghost" type="button" id="resetTimerBtn" style="margin-left:auto;">Buscar sessão agora</button>
         </div>
         <div class="tt-bar"><div class="tt-fill" id="tokenTimerFill"></div></div>
-        <div class="tt-state" id="tokenTimerState">Aguardando a captura automática pelo Chrome.</div>
+        <div class="tt-state" id="tokenTimerState">Aguardando a captura automática pelo navegador.</div>
         <div class="tt-note" id="tokenTimerNote"></div>
       </div>
 
@@ -2148,7 +2148,7 @@ function requestAutoTokensForCurrentLocation(opts){
   }
   const requestId = ++autoTokenRequestSeq;
   pendingAutoTokenRequest = requestId;
-  if(!opts.quiet) setAutoTokenStatus('Buscando a sessão desta subconta no Chrome…');
+  if(!opts.quiet) setAutoTokenStatus('Buscando a sessão desta subconta no navegador…');
   window.dispatchEvent(new CustomEvent(AUTO_TOKEN_REQUEST_EVENT, {
     detail: { version: 1, requestId, locationId }
   }));
@@ -2159,7 +2159,7 @@ function requestAutoTokensForCurrentLocation(opts){
       setAutoTokenStatus('A extensão não respondeu; o par atual continua preenchido e pode ser usado com o Location ID selecionado.');
       return;
     }
-    setAutoTokenStatus('Não recebi resposta da extensão nesta aba. Abra o AXEL no mesmo perfil do Google Chrome onde a extensão foi instalada e confira se a versão 1.0.4 está ativa.');
+    setAutoTokenStatus('Não recebi resposta da extensão nesta aba. Abra o AXEL no mesmo perfil do Google navegador onde a extensão foi instalada e confira se a versão 1.0.4 está ativa.');
   }, 3000);
 }
 
@@ -2169,11 +2169,11 @@ window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
   if(data.version !== 1 || data.requestId !== pendingAutoTokenRequest || data.locationId !== locationId) return;
   pendingAutoTokenRequest = 0;
   if(data.extensionConnected === false){
-    setAutoTokenStatus('A extensão não está ativa nesta aba. Abra o AXEL no mesmo perfil do Google Chrome onde ela foi instalada e tente novamente.');
+    setAutoTokenStatus('A extensão não está ativa nesta aba. Abra o AXEL no mesmo perfil do Google navegador onde ela foi instalada e tente novamente.');
     return;
   }
   if(!data.ok || !data.authToken || !data.tokenId){
-    setAutoTokenStatus('A extensão está conectada, mas não há sessão capturada no Chrome. Abra WhatsApp → Modelos em uma subconta acessível, aguarde carregar e tente novamente.');
+    setAutoTokenStatus('A extensão está conectada, mas não há sessão capturada no navegador. Abra WhatsApp → Modelos em uma subconta acessível, aguarde carregar e tente novamente.');
     return;
   }
   const form = document.getElementById('templateForm');
@@ -2188,7 +2188,7 @@ window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
   }
   const capturedFor = String(data.capturedForLocationId || locationId);
   setAutoTokenStatus(capturedFor === locationId
-    ? 'Sessão capturada no Chrome e pronta para esta subconta.'
+    ? 'Sessão capturada no navegador e pronta para esta subconta.'
     : 'Sessão capturada na subconta ' + capturedFor + ' reutilizada. O Location ID selecionado define o destino.', 'ok');
 });
 
@@ -2259,7 +2259,7 @@ async function applySubaccount(key, opts){
     baseInput.dispatchEvent(new Event('input', { bubbles: true }));
   }
   fillFolderConfig(s);
-  setSubaccountLog('Sub-conta "' + s.label + '" carregada — aguardando a sessão automática do Chrome.', 'ok');
+  setSubaccountLog('Sub-conta "' + s.label + '" carregada — aguardando a sessão automática do navegador.', 'ok');
   requestAutoTokensForCurrentLocation({ quiet: true });
   if(typeof checkTokensSoon === 'function') checkTokensSoon(0);
   const folderIssue = folderContextIssue();
@@ -4197,7 +4197,11 @@ def index():
 
 
 @app.route("/download/chrome-extension.zip", methods=["GET"])
-def download_chrome_extension():
+@app.route("/download/opera-extension.zip", methods=["GET"])
+def download_browser_extension():
+    is_opera = request.path.endswith("/opera-extension.zip")
+    folder_name = "axel-opera-extension" if is_opera else "axel-chrome-extension"
+    archive_name = "axel-opera-extension.zip" if is_opera else "axel-chrome-extension.zip"
     extension_dir = os.path.join(BASE_DIR, "chrome_extension")
     files = (
         "manifest.json", "capture_main.js", "ghl_relay.js", "axel_bridge.js",
@@ -4208,10 +4212,10 @@ def download_chrome_extension():
         for name in files:
             path = os.path.join(extension_dir, name)
             if os.path.isfile(path):
-                zipped.write(path, arcname="axel-chrome-extension/" + name)
+                zipped.write(path, arcname=folder_name + "/" + name)
     archive.seek(0)
     return send_file(archive, mimetype="application/zip", as_attachment=True,
-                     download_name="axel-chrome-extension.zip", max_age=0)
+                     download_name=archive_name, max_age=0)
 
 
 @app.route("/api/plan", methods=["POST"])
