@@ -4569,7 +4569,7 @@ def index():
     creds.pop("auth_mode", None)
     creds.pop("pit_token", None)
     stored_subaccounts = load_subaccounts()
-    saved_subaccounts = [{"key": key, **entry} for key, entry in stored_subaccounts.items()
+    saved_subaccounts = [{**entry, "key": key} for key, entry in stored_subaccounts.items()
                          if isinstance(entry, dict)]
     for sub in saved_subaccounts:
         sub["label"] = str(sub.get("label") or sub["key"])
