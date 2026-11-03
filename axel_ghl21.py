@@ -576,8 +576,9 @@ PAGE = """
       <input name="location_id" id="location_id" value="{{ creds.location_id or '' }}" placeholder="ex: wWSWxY95nO4lw34aS6xF" required autocomplete="off">
       <div class="inline-row">
         <input type="text" id="subaccountName" placeholder="Nome da sub-conta (ex: Polishop)" autocomplete="off">
-        <button class="btn ghost" type="button" id="saveSubaccountBtn" title="Salva nome + Location ID + endpoints de pasta">Salvar sub-conta</button>
+        <button class="btn ghost" type="button" id="saveSubaccountBtn" title="Salva no AXEL uma subconta já existente no GoHighLevel">Salvar no AXEL</button>
       </div>
+      <div class="hint">Salva aqui uma subconta que já existe no GoHighLevel; este botão não cria uma localização nova no GHL.</div>
       <div id="subaccountLog" class="log-msg sub-log"></div>
       <div class="hint">Mantenha GHL e AXEL no mesmo navegador. Ao abrir WhatsApp → Modelos, a extensão captura os tokens; o par pode ser reutilizado nas subcontas acessíveis, alterando o Location ID. <a href="/download/chrome-extension.zip">Baixar para Chrome</a> · <a href="/download/opera-extension.zip">Baixar para Opera</a><span id="subaccountFile"></span></div>
       <div class="inline-row">
@@ -3804,6 +3805,70 @@ loadCompanyPresets();
 loadBatchHistory();
 renderTemplateStatusSummary();
 initSubaccounts();
+</script>
+<script>
+// Mantém o salvamento funcional mesmo se outro trecho da tela falhar ao iniciar.
+(function bindSubaccountSave(){
+  const button = document.getElementById('saveSubaccountBtn');
+  const nameInput = document.getElementById('subaccountName');
+  const locationInput = document.getElementById('location_id');
+  const status = document.getElementById('subaccountLog');
+  if(!button || !nameInput || !locationInput || !status) return;
+
+  const showStatus = (message, kind) => {
+    status.textContent = message || '';
+    status.className = 'log-msg sub-log' + (kind ? ' ' + kind : '');
+  };
+
+  button.addEventListener('click', async () => {
+    if(button.dataset.saving === '1') return;
+    const label = nameInput.value.trim();
+    const location_id = locationInput.value.trim();
+    if(!label){ showStatus('Digite um nome para a subconta.', 'err'); nameInput.focus(); return; }
+    if(!location_id){ showStatus('Preencha o Location ID antes de salvar.', 'err'); locationInput.focus(); return; }
+    const key = label.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+    if(!key){ showStatus('Nome inválido. Use letras ou números.', 'err'); nameInput.focus(); return; }
+
+    button.dataset.saving = '1';
+    button.disabled = true;
+    button.textContent = 'Salvando...';
+    showStatus('Salvando subconta no AXEL...');
+    let saved = false;
+    try{
+      const listResponse = await fetch('/api/list-subaccounts', {credentials:'same-origin', cache:'no-store'});
+      const listData = await listResponse.json();
+      if(!listResponse.ok || !listData.ok) throw new Error(listData.msg || 'Não consegui consultar as subcontas salvas.');
+      const existing = (listData.subaccounts || []).find(item => item.key === key);
+      if(existing && existing.location_id && existing.location_id !== location_id){
+        const message = `Já existe a subconta "${existing.label}" com outro Location ID. Substituir pelo Location ID atual?`;
+        const confirmed = typeof window.axelConfirm === 'function'
+          ? await window.axelConfirm(message)
+          : window.confirm(message);
+        if(!confirmed){ showStatus('Salvamento cancelado; nada foi alterado.'); return; }
+      }
+
+      const response = await fetch('/api/save-subaccount', {
+        method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({label, location_id})
+      });
+      const data = await response.json().catch(() => ({}));
+      if(!response.ok || !data.ok) throw new Error(data.msg || data.error || `Falha ao salvar (HTTP ${response.status}).`);
+      saved = true;
+      button.textContent = 'Salvo ✓';
+      showStatus(`Subconta "${label}" salva no AXEL ✓`, 'ok');
+      setTimeout(() => window.location.reload(), 800);
+    }catch(error){
+      showStatus('Não consegui salvar: ' + (error && error.message ? error.message : 'erro de conexão.'), 'err');
+    }finally{
+      if(!saved){
+        button.disabled = false;
+        button.textContent = 'Salvar no AXEL';
+        button.dataset.saving = '';
+      }
+    }
+  });
+})();
 </script>
 </body>
 </html>
