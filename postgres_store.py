@@ -8,7 +8,7 @@ SCHEMA_SQL = """CREATE TABLE IF NOT EXISTS axel_store (
     data TEXT NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 )"""
-STORE_NAMES = frozenset({"creds.json", "subaccounts.json", "presets.json", "meta.json", "bodies.json"})
+STORE_NAMES = frozenset({"creds.json", "subaccounts.json", "presets.json", "meta.json", "bodies.json", "company_presets.json"})
 
 
 class PostgresStore:
