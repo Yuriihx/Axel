@@ -564,7 +564,8 @@ PAGE = """
       <label>Sub-conta salva</label>
       <div class="inline-row">
         <select id="credSubaccountSelect">
-          <option value="">— selecionar sub-conta —</option>
+          <option value="">— selecionar sub-conta ({{ saved_subaccounts|length }} salvas) —</option>
+          {% for sub in saved_subaccounts %}<option value="{{ sub.key }}" {% if sub.key == active_subaccount %}selected{% endif %}>{{ sub.label }}</option>{% endfor %}
         </select>
         <button class="btn danger" type="button" id="deleteSubaccountBtn" title="Apagar a sub-conta salva selecionada (só o atalho local)" disabled>Apagar</button>
       </div>
@@ -839,7 +840,8 @@ Clique abaixo para ver mais detalhes!</textarea>
     <label>Sub-conta <span class="log-msg">(sincroniza sozinha com as Credenciais)</span></label>
     <div class="inline-row">
       <select id="folderSubaccountSelect">
-        <option value="">— selecionar sub-conta —</option>
+        <option value="">— selecionar sub-conta ({{ saved_subaccounts|length }} salvas) —</option>
+        {% for sub in saved_subaccounts %}<option value="{{ sub.key }}" {% if sub.key == active_subaccount %}selected{% endif %}>{{ sub.label }}</option>{% endfor %}
       </select>
       <button class="btn ghost" type="button" id="saveFolderEndpointsBtn" title="Grava os endpoints de pasta (avançado) nesta sub-conta">Salvar endpoints</button>
     </div>
@@ -2205,6 +2207,9 @@ function getFolderConfig(){
 // Selecionar em QUALQUER um dos dois seletores (Credenciais ou Pastas)
 // aplica nos dois, preenche o Location ID e já sincroniza as pastas.
 
+const SERVER_SUBACCOUNTS = {{ saved_subaccounts|tojson }};
+const SERVER_ACTIVE_SUBACCOUNT = {{ active_subaccount|tojson }};
+let subaccountBootstrapDone = false;
 let SUBACCOUNTS = [];
 let ACTIVE_SUB = '';
 let folderReqSeq = 0;
@@ -2561,6 +2566,12 @@ async function loadSubaccounts(){
   }catch(err){
     data = null;
   }
+  const validApiList = data && data.ok && Array.isArray(data.subaccounts);
+  if(!subaccountBootstrapDone && SERVER_SUBACCOUNTS.length && (!validApiList || !data.subaccounts.length)){
+    data = Object.assign({}, data || {}, {ok:true, subaccounts:SERVER_SUBACCOUNTS,
+      active:data && data.active || SERVER_ACTIVE_SUBACCOUNT});
+  }
+  subaccountBootstrapDone = true;
   SUBACCOUNTS = data && data.ok ? (data.subaccounts || []) : [];
   if(data && data.data_file){
     document.getElementById('subaccountFile').textContent = 'Salvas em: ' + data.data_file;
@@ -4557,7 +4568,14 @@ def index():
     creds = load_creds()
     creds.pop("auth_mode", None)
     creds.pop("pit_token", None)
-    return render_template_string(PAGE, creds=creds, bg_b64=BG_IMAGE_B64,
+    stored_subaccounts = load_subaccounts()
+    saved_subaccounts = [{"key": key, **entry} for key, entry in stored_subaccounts.items()
+                         if isinstance(entry, dict)]
+    for sub in saved_subaccounts:
+        sub["label"] = str(sub.get("label") or sub["key"])
+    saved_subaccounts.sort(key=lambda sub: sub["label"].casefold())
+    return render_template_string(PAGE, creds=creds, saved_subaccounts=saved_subaccounts,
+                                  active_subaccount=creds.get("last_subaccount", ""), bg_b64=BG_IMAGE_B64,
                                   default_folder_url=DEFAULT_FOLDER_ENDPOINT,
                                   default_move_url=DEFAULT_MOVE_URL,
                                   default_move_method=DEFAULT_MOVE_METHOD,
