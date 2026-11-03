@@ -762,7 +762,10 @@ PAGE = """
 
       <label id="bodyFieldsSection">Corpo do modelo</label>
       <div class="inline-row">
-        <select id="bodyPresetSelect" class="preset-select"><option value="">carregando corpos…</option></select>
+        <select id="bodyPresetSelect" class="preset-select">
+          <option value="">— escolher corpo salvo ({{ saved_bodies['items']|length }}) —</option>
+          {% for body in saved_bodies['items'] %}<option value="{{ body.name }}" {% if body.name == saved_bodies['default'] %}selected{% endif %}>{{ '★ ' if body.name == saved_bodies['default'] else '' }}{{ body.name }}</option>{% endfor %}
+        </select>
         <button class="btn ghost" type="button" id="bodySaveBtn" title="Salva o texto abaixo como um corpo novo (ou atualiza um com o mesmo nome)">+ Salvar corpo</button>
         <button class="btn ghost" type="button" id="bodyDefaultBtn" title="Esse corpo abre carregado sempre que o AXEL iniciar" disabled>★ Padrão</button>
         <button class="btn danger" type="button" id="bodyDelBtn" title="Apaga da lista o corpo selecionado" disabled>Apagar</button>
@@ -779,7 +782,10 @@ Clique abaixo para ver mais detalhes!</textarea>
 
       <label>Campos de contato p/ variáveis (na ordem)</label>
       <div class="inline-row">
-        <select id="contactPresetSelect" class="preset-select"><option value="">carregando opções…</option></select>
+        <select id="contactPresetSelect" class="preset-select">
+          <option value="">— escolher opção salva ({{ saved_presets.contact_vars|length }}) —</option>
+          {% for value in saved_presets.contact_vars %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
+        </select>
         <button class="btn ghost" type="button" id="contactPresetAdd" title="Salva o texto do campo abaixo como uma nova opção da lista">+ Salvar opção</button>
         <button class="btn danger" type="button" id="contactPresetDel" title="Apaga da lista a opção selecionada" disabled>Apagar</button>
       </div>
@@ -787,7 +793,10 @@ Clique abaixo para ver mais detalhes!</textarea>
 
       <label>Exemplos p/ aprovação (na ordem)</label>
       <div class="inline-row">
-        <select id="examplePresetSelect" class="preset-select"><option value="">carregando opções…</option></select>
+        <select id="examplePresetSelect" class="preset-select">
+          <option value="">— escolher opção salva ({{ saved_presets.example_vars|length }}) —</option>
+          {% for value in saved_presets.example_vars %}<option value="{{ value }}">{{ value }}</option>{% endfor %}
+        </select>
         <button class="btn ghost" type="button" id="examplePresetAdd" title="Salva o texto do campo abaixo como uma nova opção da lista">+ Salvar opção</button>
         <button class="btn danger" type="button" id="examplePresetDel" title="Apaga da lista a opção selecionada" disabled>Apagar</button>
       </div>
@@ -2933,7 +2942,8 @@ function syncDateSuffix(){
 
 // ---------- Opções de campos e exemplos (Atualizações 3, 4 e 8) ----------
 
-let PRESETS = { contact_vars: [], example_vars: [] };
+const SERVER_PRESETS = {{ saved_presets|tojson }};
+let PRESETS = SERVER_PRESETS;
 const PRESET_UI = {
   contact_vars: { select: 'contactPresetSelect', input: 'contact_vars', add: 'contactPresetAdd', del: 'contactPresetDel', other: 'example_vars' },
   example_vars: { select: 'examplePresetSelect', input: 'example_vars', add: 'examplePresetAdd', del: 'examplePresetDel', other: 'contact_vars' },
@@ -3055,7 +3065,10 @@ async function loadPresets(){
   try{
     const res = await fetch('/api/presets');
     const data = await res.json();
-    if(data.ok) PRESETS = data.presets;
+    if(data.ok && data.presets && (
+      (data.presets.contact_vars || []).length || (data.presets.example_vars || []).length ||
+      !(SERVER_PRESETS.contact_vars.length || SERVER_PRESETS.example_vars.length)
+    )) PRESETS = data.presets;
   }catch(err){ /* segue com a lista vazia */ }
   renderPresetSelect('contact_vars');
   renderPresetSelect('example_vars');
@@ -3487,7 +3500,8 @@ document.getElementById('addButtonBtn').addEventListener('click', () => addButto
 
 // ---------- Corpos salvos (Atualização 16.2) ----------
 
-let BODIES = { default: '', items: [] };
+const SERVER_BODIES = {{ saved_bodies|tojson }};
+let BODIES = SERVER_BODIES;
 
 function setBodyNote(msg, kind){ setLogEl('bodyNote', msg, kind); }
 
@@ -3528,7 +3542,8 @@ async function loadBodies(){
   try{
     const res = await fetch('/api/bodies');
     const data = await res.json();
-    if(data.ok) BODIES = { default: data.default, items: data.items };
+    if(data.ok && Array.isArray(data.items) && (data.items.length || !SERVER_BODIES.items.length))
+      BODIES = { default: data.default, items: data.items };
   }catch(err){}
   if(BODIES.default) applyBody(BODIES.default);
   renderBodySelect();
@@ -4574,13 +4589,16 @@ def index():
     creds = load_creds()
     creds.pop("auth_mode", None)
     creds.pop("pit_token", None)
+    saved_presets = load_presets()
+    saved_bodies = load_bodies()
     stored_subaccounts = load_subaccounts()
     saved_subaccounts = [{**entry, "key": key} for key, entry in stored_subaccounts.items()
                          if isinstance(entry, dict)]
     for sub in saved_subaccounts:
         sub["label"] = str(sub.get("label") or sub["key"])
     saved_subaccounts.sort(key=lambda sub: sub["label"].casefold())
-    return render_template_string(PAGE, creds=creds, saved_subaccounts=saved_subaccounts,
+    return render_template_string(PAGE, creds=creds, saved_presets=saved_presets,
+                                  saved_bodies=saved_bodies, saved_subaccounts=saved_subaccounts,
                                   active_subaccount=creds.get("last_subaccount", ""), bg_b64=BG_IMAGE_B64,
                                   default_folder_url=DEFAULT_FOLDER_ENDPOINT,
                                   default_move_url=DEFAULT_MOVE_URL,
