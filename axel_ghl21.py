@@ -4295,7 +4295,7 @@ def inspect_tokens(creds, subaccounts=None):
     if c["swapped"]:
         info["notes"].append("Authorization e token-id estavam trocados — o AXEL destrocou sozinho.")
     if info["expired"]:
-    info["problems"].append("Token vencido (" + " e ".join(info["expired"]) + ") — abra WhatsApp → Modelos no GHL para atualizar a sessão automaticamente.")
+        info["problems"].append("Token vencido (" + " e ".join(info["expired"]) + ") — abra WhatsApp → Modelos no GHL para atualizar a sessão automaticamente.")
 
     subs = subaccounts if subaccounts is not None else {}
     if scope_id:
