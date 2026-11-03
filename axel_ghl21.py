@@ -232,6 +232,8 @@ PAGE = """
   .panel::-webkit-scrollbar-thumb{background:#22322d;border-radius:8px;}
   .panel h2{position:sticky;top:-20px;background:rgba(20,31,28,.97);margin:-20px -20px 14px !important;padding:14px 20px 10px;z-index:2;border-radius:14px 14px 0 0;}
   .area-model .btn-row{position:sticky;bottom:-20px;background:rgba(20,31,28,.97);margin:0 -20px -20px;padding:12px 20px 16px;border-top:1px solid var(--border);}
+  .area-model h2 #jumpBodyFieldsBtn{float:right;width:auto;margin:-2px 0 0 8px;padding:4px 9px;font-size:11px;}
+  .area-model #bodyFieldsSection{scroll-margin-top:68px;}
   .btn.ghost, .btn.small{white-space:nowrap;}
   .head-meta{display:flex;flex-direction:column;gap:4px;}
   .head-meta .eyebrow, .head-meta p.sub{margin:0;}
@@ -607,7 +609,7 @@ PAGE = """
     </div>
 
     <div class="panel area-model">
-      <h2>Modelos a criar</h2>
+      <h2>Modelos a criar <button class="btn small ghost" type="button" id="jumpBodyFieldsBtn" title="Ir direto para o corpo do modelo e os campos de variáveis">Corpo e variáveis ↓</button></h2>
       <div class="row">
         <div>
           <label>Quantidade</label>
@@ -758,7 +760,7 @@ PAGE = """
         <label><input type="radio" name="use_salutation_rotation" value="false" checked> Desligar rotação (usar modelo padrão)</label>
       </div>
 
-      <label>Corpo do modelo</label>
+      <label id="bodyFieldsSection">Corpo do modelo</label>
       <div class="inline-row">
         <select id="bodyPresetSelect" class="preset-select"><option value="">carregando corpos…</option></select>
         <button class="btn ghost" type="button" id="bodySaveBtn" title="Salva o texto abaixo como um corpo novo (ou atualiza um com o mesmo nome)">+ Salvar corpo</button>
@@ -3711,6 +3713,10 @@ function renderPreview(force){
   form.addEventListener('click', () => setTimeout(renderPreview, 0));
   setInterval(renderPreview, 700);  // pega mudanças feitas por código (corpo salvo, sub-conta, opções...)
 })();
+
+document.getElementById('jumpBodyFieldsBtn').addEventListener('click', () => {
+  document.getElementById('bodyFieldsSection').scrollIntoView({behavior:'smooth', block:'start'});
+});
 
 // ---------- Diagnóstico do token (v18) ----------
 
