@@ -2467,8 +2467,8 @@ function requestAutoTokensForCurrentLocation(opts){
       setAutoTokenStatus('A captura nova não respondeu; o par atual continua preenchido e pode ser usado com o Location ID selecionado.');
       return;
     }
-    setAutoTokenStatus('Nenhuma sessão encontrada neste navegador. Abra WhatsApp → Modelos no GHL, capture os tokens uma vez e depois reutilize o par nas subcontas acessíveis, alterando o Location ID.');
-  }, 1600);
+    setAutoTokenStatus('A extensão não respondeu após 5 segundos. Confira se o AXEL e o GHL estão no mesmo perfil do navegador e atualize esta aba do GHL.');
+  }, 5000);
 }
 
 window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
