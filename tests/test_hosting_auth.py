@@ -9,7 +9,6 @@ import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from werkzeug.security import check_password_hash
 
 PROJECT = Path(__file__).resolve().parents[1]
 WORK = PROJECT.parents[1] / "work" / "hosting-tests"
@@ -67,55 +66,6 @@ class HostingAuthTests(unittest.TestCase):
             "username": username, "password": password, "csrf_token": token,
         })
 
-    def enable_isolated_postgres(self):
-        class MemoryPostgresStore:
-            def __init__(self):
-                self.users = {}
-                self.data = {}
-
-            def find_user(self, username_key):
-                return self.users.get(username_key)
-
-            def create_user(self, user_id, username, username_key, password_hash):
-                if username_key in self.users:
-                    return False
-                self.users[username_key] = {"user_id": user_id, "username": username,
-                                            "password_hash": password_hash}
-                return True
-
-            def read(self, path, owner_id="admin"):
-                return self.data.get((owner_id, Path(path).name), {}).copy()
-
-            def write(self, path, data, owner_id="admin"):
-                self.data[(owner_id, Path(path).name)] = data.copy()
-
-        self.fake_store = MemoryPostgresStore()
-        self.old_store = self.hosting._postgres_store
-        self.old_read = self.hosting._axel.read_store
-        self.old_write = self.hosting._axel.write_store
-        self.hosting._postgres_store = self.fake_store
-        self.hosting._axel.read_store = lambda path: self.fake_store.read(
-            path, owner_id=self.hosting._current_user_id())
-        self.hosting._axel.write_store = lambda path, data: self.fake_store.write(
-            path, data, owner_id=self.hosting._current_user_id())
-        self.addCleanup(self.restore_postgres)
-
-    def restore_postgres(self):
-        if hasattr(self, "old_store"):
-            self.hosting._postgres_store = self.old_store
-            self.hosting._axel.read_store = self.old_read
-            self.hosting._axel.write_store = self.old_write
-
-    def signup(self, username, password="new-password-123", client=None, confirm=None):
-        client = client or self.client
-        token = re.search(r'name="csrf_token" value="([^"]+)"',
-                          client.get("/signup", base_url=BASE).get_data(as_text=True))[1]
-        return client.post("/signup", base_url=BASE, headers={"Origin": BASE}, data={
-            "username": username, "password": password,
-            "password_confirm": password if confirm is None else confirm,
-            "csrf_token": token,
-        })
-
     def test_fail_closed_before_original_import(self):
         # Execute only this wrapper under an isolated name. Invalid config must fail
         # before any import of the original application or data-store initialization.
@@ -143,10 +93,9 @@ class HostingAuthTests(unittest.TestCase):
     def test_only_login_and_health_are_anonymous(self):
         self.assertEqual(self.client.get("/healthz", base_url=BASE).get_json(), {"ok": True})
         self.assertEqual(self.client.get("/login", base_url=BASE).status_code, 200)
-        self.assertEqual(self.client.get("/signup", base_url=BASE).status_code, 200)
         # Exhaustively inspect the real application's registered routes, including APIs.
         for rule in self.app.url_map.iter_rules():
-            if rule.endpoint in {"hosting_login", "hosting_signup", "hosting_healthz"}:
+            if rule.endpoint in {"hosting_login", "hosting_healthz"}:
                 continue
             method = "POST" if "POST" in rule.methods else "GET"
             with self.subTest(path=rule.rule, method=method):
@@ -240,73 +189,6 @@ class HostingAuthTests(unittest.TestCase):
         finally:
             self.app.config["TRUSTED_HOSTS"] = old
 
-    def test_signup_hashes_password_and_logs_user_in(self):
-        self.enable_isolated_postgres()
-        response = self.signup("yuri.teste")
-        self.assertEqual(response.status_code, 302)
-        record = self.fake_store.users["yuri.teste"]
-        self.assertNotEqual(record["password_hash"], "new-password-123")
-        self.assertTrue(check_password_hash(record["password_hash"], "new-password-123"))
-        with self.client.session_transaction(base_url=BASE) as auth_session:
-            self.assertEqual(auth_session["axel_user_id"], record["user_id"])
-            self.assertEqual(auth_session["axel_username"], "yuri.teste")
-        self.assertEqual(self.client.get("/api/list-subaccounts", base_url=BASE).get_json()["subaccounts"], [])
-
-    def test_users_get_separate_axel_data_and_admin_data_stays_intact(self):
-        self.enable_isolated_postgres()
-        first = self.app.test_client()
-        self.signup("primeira", client=first)
-        with first.session_transaction(base_url=BASE) as auth_session:
-            first_id = auth_session["axel_user_id"]
-        saved = first.post("/api/save-subaccount", base_url=BASE, headers={"Origin": BASE}, json={
-            "label": "Loja primeira", "location_id": "location-first",
-        })
-        self.assertEqual(saved.status_code, 200)
-
-        second = self.app.test_client()
-        self.signup("segunda", client=second)
-        self.assertEqual(second.get("/api/list-subaccounts", base_url=BASE).get_json()["subaccounts"], [])
-        with second.session_transaction(base_url=BASE) as auth_session:
-            second_id = auth_session["axel_user_id"]
-        self.assertNotEqual(first_id, second_id)
-        self.assertIn((first_id, "subaccounts.json"), self.fake_store.data)
-        self.assertNotIn((second_id, "subaccounts.json"), self.fake_store.data)
-
-        admin = self.app.test_client()
-        self.assertEqual(self.login(client=admin).status_code, 302)
-        self.assertEqual(admin.get("/api/list-subaccounts", base_url=BASE).get_json()["subaccounts"], [])
-
-    def test_signup_rejects_bad_input_and_case_insensitive_duplicate(self):
-        self.enable_isolated_postgres()
-        self.assertEqual(self.signup("ab").status_code, 400)
-        self.assertEqual(self.signup("gooduser", confirm="different-password").status_code, 400)
-        first = self.app.test_client()
-        self.assertEqual(self.signup("NomeUsuario", client=first).status_code, 302)
-        duplicate = self.app.test_client()
-        response = self.signup("nomeusuario", client=duplicate)
-        self.assertEqual(response.status_code, 409)
-        self.assertIn("já está cadastrado", response.get_data(as_text=True))
-
-    def test_registered_user_can_log_in_with_saved_password(self):
-        self.enable_isolated_postgres()
-        self.assertEqual(self.signup("retorno").status_code, 302)
-        client = self.app.test_client()
-        response = self.login(username="RETORNO", password="new-password-123", client=client)
-        self.assertEqual(response.status_code, 302)
-        with client.session_transaction(base_url=BASE) as auth_session:
-            self.assertEqual(auth_session["axel_username"], "retorno")
-
-    def test_signup_requires_same_origin_and_csrf(self):
-        self.enable_isolated_postgres()
-        token = re.search(r'name="csrf_token" value="([^"]+)"',
-                          self.client.get("/signup", base_url=BASE).get_data(as_text=True))[1]
-        payload = {"username": "secureuser", "password": "new-password-123",
-                   "password_confirm": "new-password-123", "csrf_token": token}
-        self.assertEqual(self.client.post("/signup", base_url=BASE, data=payload).status_code, 403)
-        self.assertEqual(self.client.post("/signup", base_url=BASE, headers={"Origin": BASE},
-                                          data={**payload, "csrf_token": "wrong"}).status_code, 403)
-
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-

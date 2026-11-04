@@ -1,104 +1,114 @@
-"""Isolated checks for durable account and per-user AXEL storage."""
-import unittest
+"""Offline SQL-contract checks. Live Neon connectivity is checked on deployment."""
+import importlib
+import os
 from pathlib import Path
+import sqlite3
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
 
-from postgres_store import PostgresStore
+PROJECT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT))
+from postgres_store import PostgresStore, STORE_NAMES
+
+TEST_URL = "postgresql://test:discardable@db.example/test?sslmode=require"
 
 
-class MemoryConnection:
-    def __init__(self, database):
-        self.database = database
-
+class LocalSQL:
+    """DB-API contract over SQLite, using the same statements as production."""
+    def __init__(self, path):
+        self.conn = sqlite3.connect(path)
     def __enter__(self):
         return self
-
-    def __exit__(self, exc_type, exc, traceback):
-        return False
-
-    def execute(self, sql, params=()):
-        statement = " ".join(sql.split())
-        if statement.startswith("CREATE TABLE"):
-            self.database.schemas.append(statement)
-            return Cursor(None)
-        if statement.startswith("SELECT name FROM axel_store") or statement.startswith("SELECT owner_id FROM axel_user_store") or statement.startswith("SELECT user_id FROM axel_users"):
-            return Cursor(None)
-        if statement.startswith("SELECT data FROM axel_store"):
-            return Cursor((self.database.legacy[params[0]],) if params[0] in self.database.legacy else None)
-        if statement.startswith("SELECT data FROM axel_user_store"):
-            key = (params[0], params[1])
-            return Cursor((self.database.user_data[key],) if key in self.database.user_data else None)
-        if statement.startswith("INSERT INTO axel_store"):
-            self.database.legacy[params[0]] = params[1]
-            return Cursor(None)
-        if statement.startswith("INSERT INTO axel_user_store"):
-            self.database.user_data[(params[0], params[1])] = params[2]
-            return Cursor(None)
-        if statement.startswith("SELECT user_id, username, password_hash FROM axel_users"):
-            return Cursor(self.database.users.get(params[0]))
-        if statement.startswith("INSERT INTO axel_users"):
-            if params[2] in self.database.users:
-                return Cursor(None)
-            self.database.users[params[2]] = (params[0], params[1], params[3])
-            return Cursor((params[0],))
-        raise AssertionError(f"Unexpected SQL: {statement}")
+    def execute(self, sql, args=()):
+        return self.conn.execute(sql.replace("%s", "?"), args)
+    def __exit__(self, kind, value, traceback):
+        if kind is None:
+            self.conn.commit()
+        else:
+            self.conn.rollback()
+        self.conn.close()
 
 
-class Cursor:
-    def __init__(self, row):
-        self.row = row
-
-    def fetchone(self):
-        return self.row
-
-
-class MemoryDatabase:
-    def __init__(self):
-        self.schemas = []
-        self.legacy = {}
-        self.user_data = {}
-        self.users = {}
-
-    def connect(self):
-        return MemoryConnection(self)
-
-
-class PostgresStoreTests(unittest.TestCase):
+class PostgresStorageTests(unittest.TestCase):
     def setUp(self):
-        self.database = MemoryDatabase()
-        self.store = PostgresStore("postgresql://localhost/axel?sslmode=require",
-                                   connect=self.database.connect)
-
-    def test_initialization_creates_legacy_user_and_tenant_tables(self):
+        work = PROJECT.parents[1] / "work" / "hosting-tests"
+        work.mkdir(parents=True, exist_ok=True)
+        self.temp = tempfile.TemporaryDirectory(dir=work)
+        self.db = Path(self.temp.name) / "stores.sqlite"
+        self.connect = lambda: LocalSQL(self.db)
+        self.store = PostgresStore(TEST_URL, connect=self.connect)
         self.store.initialize()
-        self.assertEqual(len(self.database.schemas), 3)
-        self.assertTrue(any("axel_users" in sql for sql in self.database.schemas))
-        self.assertTrue(any("axel_user_store" in sql for sql in self.database.schemas))
-        self.store.check()
 
-    def test_legacy_admin_data_is_kept_and_each_user_is_scoped(self):
-        self.store.write("subaccounts.json", {"admin": {"label": "Admin"}})
-        self.store.write("subaccounts.json", {"one": {"label": "One"}}, owner_id="user-1")
-        self.store.write("subaccounts.json", {"two": {"label": "Two"}}, owner_id="user-2")
-        self.assertEqual(self.store.read("subaccounts.json"), {"admin": {"label": "Admin"}})
-        self.assertEqual(self.store.read("subaccounts.json", owner_id="user-1"), {"one": {"label": "One"}})
-        self.assertEqual(self.store.read("subaccounts.json", owner_id="user-2"), {"two": {"label": "Two"}})
-        self.assertEqual(self.store.read("creds.json", owner_id="user-1"), {})
+    def tearDown(self):
+        self.temp.cleanup()
 
-    def test_user_records_store_hash_and_enforce_unique_normalized_username(self):
-        self.assertTrue(self.store.create_user("user-1", "LojaTeste", "lojateste", "hash-only"))
-        self.assertFalse(self.store.create_user("user-2", "lojateste", "lojateste", "other-hash"))
-        self.assertEqual(self.store.find_user("lojateste"), {
-            "user_id": "user-1", "username": "LojaTeste", "password_hash": "hash-only",
-        })
-        self.assertIsNone(self.store.find_user("missing"))
+    def test_all_stores_survive_new_instance_and_update(self):
+        for name in STORE_NAMES:
+            data = {"name": "Afétos", "nested": [1, {"body": "{{1}}"}], "empty": ""}
+            self.store.write(name, data)
+            reopened = PostgresStore(TEST_URL, connect=self.connect)
+            reopened.check()
+            self.assertEqual(reopened.read(name), data)
+            reopened.write(name, {"updated": True})
+            self.assertEqual(self.store.read(name), {"updated": True})
 
-    def test_invalid_store_names_and_payload_types_are_rejected(self):
+    def test_missing_row_returns_empty_but_corruption_raises(self):
+        self.assertEqual(self.store.read("creds.json"), {})
+        with self.connect() as conn:
+            conn.execute("INSERT INTO axel_store(name,data) VALUES(%s,%s)", ("creds.json", "invalid JSON"))
+        with self.assertRaises(OSError):
+            self.store.read("creds.json")
+
+    def test_failure_is_not_empty_and_does_not_leak_connection_secret(self):
+        def failed():
+            raise RuntimeError(TEST_URL)
+        broken = PostgresStore(TEST_URL, connect=failed)
+        for operation in (broken.check, broken.initialize,
+                          lambda: broken.read("creds.json"), lambda: broken.write("creds.json", {})):
+            with self.subTest(operation=operation), self.assertRaises(OSError) as caught:
+                operation()
+            self.assertNotIn(TEST_URL, str(caught.exception))
+
+    def test_requires_postgres_ssl_and_known_records(self):
+        for url in ("", "sqlite:///file", "postgresql://", TEST_URL.replace("require", "disable")):
+            with self.subTest(url=url), self.assertRaises(RuntimeError):
+                PostgresStore(url, connect=self.connect)
         with self.assertRaises(ValueError):
-            self.store.read(Path("outside.txt"))
+            self.store.read("other.json")
         with self.assertRaises(ValueError):
-            self.store.write("creds.json", ["not", "an", "object"])
+            self.store.write("bodies.json", [])
+
+    def test_web_app_routes_use_database_store(self):
+        modules = {name: sys.modules.pop(name, None) for name in ("wsgi", "axel_ghl21")}
+        try:
+            with patch.dict(os.environ, {
+                "AXEL_ADMIN_PASSWORD": "discardable-test-password",
+                "AXEL_SECRET_KEY": "discardable-test-secret-at-least-thirty-two-characters",
+                "AXEL_DATA_DIR": self.temp.name,
+                "AXEL_STORAGE_MODE": "postgres", "DATABASE_URL": TEST_URL,
+                "RENDER": "false", "RENDER_EXTERNAL_HOSTNAME": "",
+            }), patch.object(PostgresStore, "_connect", lambda _: self.connect()):
+                hosted = importlib.import_module("wsgi")
+                hosted.app.config["TESTING"] = True
+                client = hosted.app.test_client()
+                base = "https://axel-test.example"
+                with client.session_transaction(base_url=base) as auth:
+                    import time
+                    auth["axel_authenticated"] = True
+                    auth["axel_logged_in_at"] = time.time()
+                response = client.post("/api/bodies/save", base_url=base, headers={"Origin": base},
+                                       json={"name": "Banco", "text": "Corpo persistente"})
+                self.assertTrue(response.get_json()["ok"])
+                self.assertTrue(any(item["name"] == "Banco" for item in self.store.read("bodies.json")["items"]))
+                self.assertFalse((Path(self.temp.name) / "bodies.json").exists())
+        finally:
+            for name, previous in modules.items():
+                sys.modules.pop(name, None)
+                if previous is not None:
+                    sys.modules[name] = previous
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
+    unittest.main()

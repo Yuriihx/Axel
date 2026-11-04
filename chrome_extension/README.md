@@ -4,9 +4,9 @@ A extensão usa a arquitetura Chromium e funciona no Chrome e no Opera. A captur
 
 ## Instalação no Chrome
 
-1. No AXEL, clique em **Baixar para Chrome** e extraia o ZIP mais recente. Para atualizar uma versão instalada sem compactação, carregue a pasta extraída nova em `chrome://extensions`.
+1. No AXEL, clique em **Baixar para Chrome** e extraia o ZIP.
 2. Abra `chrome://extensions`, ligue **Modo do desenvolvedor** e clique em **Carregar sem compactação**.
-3. Selecione a pasta `axel-chrome-extension` extraída. Se o navegador pedir, permita o acesso ao AXEL. Atualize as abas do AXEL e do GHL depois de instalar.
+3. Selecione a pasta `axel-chrome-extension` extraída. Se o navegador pedir, permita o acesso ao AXEL e atualize a aba do AXEL.
 
 ## Instalação no Opera
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AXEL — captura automática do GHL",
-  "version": "1.0.6",
+  "version": "1.0.5",
   "description": "Captura a sessão do GHL para o AXEL em navegadores Chromium, incluindo Chrome e Opera.",
   "permissions": [
     "storage"
