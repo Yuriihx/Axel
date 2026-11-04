@@ -3444,7 +3444,7 @@ renderButtons();
 loadBodies();
 renderPreview(true);
 loadPresets();
-renderTemplateStatusSummary();
+// O resumo de status foi removido nesta versão; evitar erro antes de carregar as subcontas.
 initSubaccounts();
 </script>
 <script>
