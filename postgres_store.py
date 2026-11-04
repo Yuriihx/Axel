@@ -22,7 +22,7 @@ USERS_SQL = """CREATE TABLE IF NOT EXISTS axel_users (
     password_hash TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 )"""
-STORE_NAMES = frozenset({"creds.json", "subaccounts.json", "presets.json", "meta.json", "bodies.json", "company_presets.json"})
+STORE_NAMES = frozenset({"creds.json", "subaccounts.json", "presets.json", "meta.json", "bodies.json"})
 
 
 class PostgresStore:
