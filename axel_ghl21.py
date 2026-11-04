@@ -2440,6 +2440,7 @@ const AUTO_TOKEN_RESPONSE_EVENT = 'axel-ghl-token-response';
 const AUTO_TOKEN_AVAILABLE_EVENT = 'axel-ghl-token-available';
 let autoTokenRequestSeq = 0;
 let pendingAutoTokenRequest = 0;
+let syncingSubaccountLocation = false;
 
 function setAutoTokenStatus(message, kind){
   const el = document.getElementById('autoTokenStatus');
@@ -2550,7 +2551,17 @@ async function applySubaccount(key, opts){
     setFolderSyncLog('Configure os endpoints de pastas desta subconta antes de continuar.');
     return;
   }
-  document.getElementById('location_id').value = s.location_id || '';
+  const locationInput = document.getElementById('location_id');
+  const nextLocationId = String(s.location_id || '').trim();
+  // Sincroniza os componentes ligados ao campo sem acionar o fluxo de edição manual,
+  // que desmarca a subconta e apagaria a configuração recém-carregada.
+  syncingSubaccountLocation = true;
+  try {
+    locationInput.value = nextLocationId;
+    locationInput.dispatchEvent(new Event('input', { bubbles: true }));
+  } finally {
+    syncingSubaccountLocation = false;
+  }
   if(previousLocationId !== String(s.location_id || '').trim() && hasSessionTokens()){
     setAutoTokenStatus('Mantendo a sessão capturada. O Location ID selecionado define a subconta de destino.', 'ok');
   }
@@ -2562,7 +2573,7 @@ async function applySubaccount(key, opts){
     baseInput.dispatchEvent(new Event('input', { bubbles: true }));
   }
   fillFolderConfig(s);
-  setSubaccountLog('Sub-conta "' + s.label + '" carregada — aguardando a sessão automática do navegador.', 'ok');
+  setSubaccountLog('Sub-conta "' + s.label + '" selecionada · Location ID sincronizado: ' + nextLocationId + '. Buscando a sessão automática do navegador.', 'ok');
   requestAutoTokensForCurrentLocation({ quiet: true });
   if(typeof checkTokensSoon === 'function') checkTokensSoon(0);
   const folderIssue = folderContextIssue();
@@ -2615,6 +2626,7 @@ async function initSubaccounts(){
 
 // Invalidate folder state as soon as the destination changes, before blur or save.
 document.getElementById('location_id').addEventListener('input', function(){
+  if(syncingSubaccountLocation) return;
   detachFolderContext();
   if(activeTokenLocationId && activeTokenLocationId !== this.value.trim() && hasSessionTokens()){
     setAutoTokenStatus('Mantendo a sessão capturada. O Location ID selecionado define a subconta de destino.', 'ok');
