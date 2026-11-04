@@ -2438,6 +2438,8 @@ function persistActiveSub(key){
 const AUTO_TOKEN_REQUEST_EVENT = 'axel-ghl-token-request';
 const AUTO_TOKEN_RESPONSE_EVENT = 'axel-ghl-token-response';
 const AUTO_TOKEN_AVAILABLE_EVENT = 'axel-ghl-token-available';
+const AUTO_TOKEN_PAGE_SOURCE = 'AXEL_GHL_PAGE_V1';
+const AUTO_TOKEN_EXTENSION_SOURCE = 'AXEL_GHL_EXTENSION_V1';
 let autoTokenRequestSeq = 0;
 let pendingAutoTokenRequest = 0;
 
@@ -2458,9 +2460,11 @@ function requestAutoTokensForCurrentLocation(opts){
   const requestId = ++autoTokenRequestSeq;
   pendingAutoTokenRequest = requestId;
   if(!opts.quiet) setAutoTokenStatus('Buscando a sessão desta subconta no navegador…');
-  window.dispatchEvent(new CustomEvent(AUTO_TOKEN_REQUEST_EVENT, {
+  window.postMessage({
+    source: AUTO_TOKEN_PAGE_SOURCE,
+    type: AUTO_TOKEN_REQUEST_EVENT,
     detail: { version: 1, requestId, locationId }
-  }));
+  }, location.origin);
   setTimeout(() => {
     if(pendingAutoTokenRequest !== requestId) return;
     if(hasSessionTokens()){
@@ -2471,33 +2475,38 @@ function requestAutoTokensForCurrentLocation(opts){
   }, 5000);
 }
 
-window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
-  const data = event.detail || {};
-  const locationId = document.getElementById('location_id').value.trim();
-  if(data.version !== 1 || data.requestId !== pendingAutoTokenRequest || data.locationId !== locationId) return;
-  if(!data.ok || !data.authToken || !data.tokenId){
-    setAutoTokenStatus('Ainda não há sessão capturada para esta subconta. Abra WhatsApp → Modelos no GHL e tente novamente, ou preencha os dois campos manualmente.');
+window.addEventListener('message', event => {
+  if(event.source !== window || event.origin !== location.origin) return;
+  const envelope = event.data;
+  if(!envelope || envelope.source !== AUTO_TOKEN_EXTENSION_SOURCE) return;
+  const data = envelope.detail || {};
+
+  if(envelope.type === AUTO_TOKEN_RESPONSE_EVENT){
+    const locationId = document.getElementById('location_id').value.trim();
+    if(data.version !== 1 || data.requestId !== pendingAutoTokenRequest || data.locationId !== locationId) return;
+    if(!data.ok || !data.authToken || !data.tokenId){
+      setAutoTokenStatus('A extensão respondeu, mas ainda não há sessão capturada. Abra WhatsApp → Modelos no GHL, aguarde carregar e tente novamente.');
+      return;
+    }
+    const form = document.getElementById('templateForm');
+    activeTokenLocationId = String(data.capturedForLocationId || locationId);
+    form.elements['auth_token'].value = String(data.authToken);
+    form.elements['token_id'].value = String(data.tokenId);
+    applyingAutoTokenResponse = true;
+    try {
+      ['auth_token', 'token_id'].forEach(name => form.elements[name].dispatchEvent(new Event('input', { bubbles: true })));
+    } finally {
+      applyingAutoTokenResponse = false;
+    }
+    const capturedFor = String(data.capturedForLocationId || locationId);
+    setAutoTokenStatus(capturedFor === locationId
+      ? 'Sessão capturada neste navegador e pronta para esta subconta.'
+      : 'Sessão capturada na subconta ' + capturedFor + ' reutilizada. O Location ID selecionado define o destino.', 'ok');
     return;
   }
-  const form = document.getElementById('templateForm');
-  activeTokenLocationId = String(data.capturedForLocationId || locationId);
-  form.elements['auth_token'].value = String(data.authToken);
-  form.elements['token_id'].value = String(data.tokenId);
-  applyingAutoTokenResponse = true;
-  try {
-    ['auth_token', 'token_id'].forEach(name => form.elements[name].dispatchEvent(new Event('input', { bubbles: true })));
-  } finally {
-    applyingAutoTokenResponse = false;
-  }
-  const capturedFor = String(data.capturedForLocationId || locationId);
-  setAutoTokenStatus(capturedFor === locationId
-    ? 'Sessão capturada neste navegador e pronta para esta subconta.'
-    : 'Sessão capturada na subconta ' + capturedFor + ' reutilizada. O Location ID selecionado define o destino.', 'ok');
-});
 
-window.addEventListener(AUTO_TOKEN_AVAILABLE_EVENT, event => {
-  const data = event.detail || {};
-  if(data.version === 1 && data.locationId === document.getElementById('location_id').value.trim()){
+  if(envelope.type === AUTO_TOKEN_AVAILABLE_EVENT && data.version === 1 &&
+      data.locationId === document.getElementById('location_id').value.trim()){
     requestAutoTokensForCurrentLocation({ quiet: true });
   }
 });
