@@ -321,6 +321,14 @@ PAGE = """
   .inline-row > select, .inline-row > input{flex:1;min-width:0;margin:0;}
   .inline-row > .btn{width:auto;flex:0 0 auto;margin:0;padding:0 14px;white-space:nowrap;font-size:13px;}
   .inline-row > .btn.danger{padding:0 12px;}
+  .subaccount-search-wrap{position:relative;margin:-5px 0 10px;z-index:4;}
+  .subaccount-search-wrap > input{width:100%;margin:0;}
+  .subaccount-search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:30;max-height:220px;overflow-y:auto;padding:4px;background:#0b1512;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45);}
+  .subaccount-search-results[hidden]{display:none;}
+  .subaccount-search-option{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:9px 10px;border:0;border-radius:7px;background:transparent;color:#eaf5f0;text-align:left;cursor:pointer;}
+  .subaccount-search-option:hover,.subaccount-search-option:focus{background:rgba(34,197,94,.14);outline:none;}
+  .subaccount-search-option small{color:var(--muted);font-size:10px;white-space:nowrap;}
+  .subaccount-search-empty{padding:10px;color:var(--muted);font-size:12px;}
   .sub-log{margin:-6px 0 10px;min-height:16px;}
   .sub-log.ok{color:var(--accent);}  .sub-log.err{color:var(--danger);}
   .var-check{font-size:12px;margin:-6px 0 14px;color:var(--muted);line-height:1.5;}
@@ -548,6 +556,10 @@ PAGE = """
     <div class="panel area-cred">
       <h2>Credenciais</h2>
       <label>Sub-conta salva</label>
+      <div class="subaccount-search-wrap">
+        <input type="search" id="credSubaccountSearch" placeholder="Digite para buscar pelo nome..." autocomplete="off" aria-label="Buscar subconta salva">
+        <div id="credSubaccountSearchResults" class="subaccount-search-results" role="listbox" hidden></div>
+      </div>
       <div class="inline-row">
         <select id="credSubaccountSelect">
           <option value="">— selecionar sub-conta ({{ saved_subaccounts|length }} salvas) —</option>
@@ -826,6 +838,10 @@ Clique abaixo para ver mais detalhes!</textarea>
     <p class="sub" style="margin-top:-6px;font-size:13px;">Clique em <b>Usar</b> para jogar a pasta no campo de criação.</p>
 
     <label>Sub-conta <span class="log-msg">(sincroniza sozinha com as Credenciais)</span></label>
+    <div class="subaccount-search-wrap">
+      <input type="search" id="folderSubaccountSearch" placeholder="Digite para buscar pelo nome..." autocomplete="off" aria-label="Buscar subconta para pastas">
+      <div id="folderSubaccountSearchResults" class="subaccount-search-results" role="listbox" hidden></div>
+    </div>
     <div class="inline-row">
       <select id="folderSubaccountSelect">
         <option value="">— selecionar sub-conta ({{ saved_subaccounts|length }} salvas) —</option>
@@ -2086,6 +2102,69 @@ function setLogEl(id, msg, kind){
 }
 function setSubaccountLog(msg, kind){ setLogEl('subaccountLog', msg, kind); }
 function setFolderSyncLog(msg, kind){ setLogEl('folderSyncLog', msg, kind); }
+
+function normalizeSubaccountSearch(value){
+  return String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
+}
+
+function renderSubaccountSearchResults(inputId, resultsId){
+  const input = document.getElementById(inputId);
+  const results = document.getElementById(resultsId);
+  if(!input || !results) return;
+  const query = normalizeSubaccountSearch(input.value);
+  results.innerHTML = '';
+  if(!query){ results.hidden = true; return; }
+
+  const matches = SUBACCOUNTS.filter(sub =>
+    normalizeSubaccountSearch(sub.label).includes(query) ||
+    normalizeSubaccountSearch(sub.location_id).includes(query)
+  );
+  if(!matches.length){
+    const empty = document.createElement('div');
+    empty.className = 'subaccount-search-empty';
+    empty.textContent = 'Nenhuma subconta encontrada. Confira o nome digitado.';
+    results.appendChild(empty);
+    results.hidden = false;
+    return;
+  }
+
+  matches.forEach(sub => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'subaccount-search-option';
+    option.setAttribute('role', 'option');
+    option.setAttribute('aria-label', 'Selecionar subconta ' + sub.label);
+    const label = document.createElement('span');
+    label.textContent = sub.label;
+    option.appendChild(label);
+    if(sub.location_id){
+      const location = document.createElement('small');
+      location.textContent = sub.location_id;
+      option.appendChild(location);
+    }
+    option.addEventListener('click', function(){
+      input.value = '';
+      results.hidden = true;
+      applySubaccount(sub.key);
+    });
+    results.appendChild(option);
+  });
+  results.hidden = false;
+}
+
+[
+  ['credSubaccountSearch', 'credSubaccountSearchResults'],
+  ['folderSubaccountSearch', 'folderSubaccountSearchResults']
+].forEach(([inputId, resultsId]) => {
+  const input = document.getElementById(inputId);
+  if(!input) return;
+  input.addEventListener('input', () => renderSubaccountSearchResults(inputId, resultsId));
+  input.addEventListener('keydown', event => {
+    if(event.key !== 'Enter') return;
+    const firstMatch = document.getElementById(resultsId).querySelector('.subaccount-search-option');
+    if(firstMatch){ event.preventDefault(); firstMatch.click(); }
+  });
+});
 
 function renderSubaccountSelects(){
   ['credSubaccountSelect', 'folderSubaccountSelect'].forEach(id => {
