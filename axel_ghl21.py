@@ -66,7 +66,6 @@ SUBACCOUNTS_FILE = os.path.join(DATA_DIR, "subaccounts.json")
 PRESETS_FILE = os.path.join(DATA_DIR, "presets.json")
 META_FILE = os.path.join(DATA_DIR, "meta.json")
 BODIES_FILE = os.path.join(DATA_DIR, "bodies.json")
-COMPANY_PRESETS_FILE = os.path.join(DATA_DIR, "company_presets.json")
 
 # ---------- Cabeçalho com mídia (Atualização 16.1) ----------
 # Endpoints presumidos da biblioteca de mídias do GHL. Se o GHL responder
@@ -151,21 +150,6 @@ DEFAULT_MOVE_METHOD = "PUT"
 
 # Quantidade máxima de modelos por lote (campo "Quantidade").
 MAX_QTY = 500
-BATCH_HISTORY_LIMIT = 25
-COMPANY_PRESET_FIELDS = (
-    "company_name", "category", "lang", "body_text", "footer_text", "buttons_json",
-    "contact_vars", "example_vars", "use_salutation_rotation", "header_type", "header_text",
-    "header_media_url", "header_media_name", "header_media_body", "header_media_extra",
-    "header_location_body", "header_loc_lat", "header_loc_lng", "header_loc_name", "header_loc_address",
-)
-BATCH_CONFIG_FIELDS = (
-    "location_id", "qty", "lang", "category", "base_name", "date_suffix", "company_name",
-    "header_type", "header_text", "header_media_url", "header_media_name", "body_text",
-    "contact_vars", "example_vars", "footer_text", "buttons_json", "folder_id",
-    "template_folder_key", "header_media_body", "header_media_extra", "header_location_body",
-    "header_loc_lat", "header_loc_lng", "header_loc_name", "header_loc_address",
-    "use_salutation_rotation",
-)
 
 DEFAULT_EXTRA_HEADERS = {
     "channel": "APP",
@@ -366,7 +350,7 @@ PAGE = """
   .media-item .ph{height:70px;display:flex;align-items:center;justify-content:center;font-size:22px;}
   .media-item.on{border-color:var(--accent);color:var(--accent);}
   /* ---- botões ---- */
-  .btn-item{border:1px solid var(--card-edge);border-radius:10px;padding:10px;margin-bottom:8px;background:#0b1512;transition:border-color .2s ease;}
+   .btn-item{border:1px solid var(--card-edge);border-radius:10px;padding:10px;margin-bottom:8px;background:#0b1512;transition:border-color .2s ease;}
   .btn-item:hover{border-color:var(--card-edge-hover);}
   .btn-item.dragging{opacity:.45;}
   .btn-item.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px rgba(32,211,153,.18);}
@@ -650,14 +634,6 @@ PAGE = """
           <input name="company_name" id="company_name" placeholder="ex: Polishop, Natura, etc" value="[Empresa]">
         </div>
       </div>
-      <label>Configuração salva por empresa</label>
-      <div class="inline-row" style="flex-wrap:wrap;">
-        <select id="companyPresetSelect" style="flex:1 1 180px;"><option value="">— escolher empresa salva —</option></select>
-        <button class="btn ghost" type="button" id="loadCompanyPresetBtn" style="width:auto;">Carregar</button>
-        <button class="btn ghost" type="button" id="saveCompanyPresetBtn" style="width:auto;">Salvar/atualizar</button>
-        <button class="btn danger" type="button" id="deleteCompanyPresetBtn" style="width:auto;" disabled>Apagar</button>
-      </div>
-      <div id="companyPresetNote" class="log-msg sub-log"></div>
 
       <label>Cabeçalho <span class="log-msg">(opcional)</span></label>
       <div class="htype-grid" id="headerTypeGrid">
@@ -902,13 +878,6 @@ Clique abaixo para ver mais detalhes!</textarea>
       <div class="progress-label" id="progressLabel">0 / 0</div>
     </div>
     <div id="log"><div class="empty">Nenhum modelo criado ainda nesta sessão.</div></div>
-    <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;">
-      <div class="inline-row" style="align-items:center;">
-        <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0;">Histórico de lotes</h3>
-        <button class="btn ghost" type="button" id="refreshBatchHistoryBtn" style="width:auto;margin-left:auto;">Atualizar</button>
-      </div>
-      <div id="batchHistory" style="max-height:330px;overflow:auto;margin-top:8px;"><div class="empty">Carregando histórico…</div></div>
-    </div>
   </div>
 
   <div class="panel area-del">
@@ -916,10 +885,8 @@ Clique abaixo para ver mais detalhes!</textarea>
     <p class="sub" style="margin-top:-6px;font-size:13px;">Selecione modelos para <b>mover para uma pasta</b> ou <b>apagar</b> (apagar é irreversível).</p>
 
     <div class="btn-row" style="margin-bottom:14px;">
-      <button class="btn" type="button" id="loadTemplatesBtn" style="width:auto;">Atualizar modelos e status do GHL</button>
-      <button class="btn ghost" type="button" id="exportTemplatesBtn" style="width:auto;" disabled>Baixar CSV</button>
+      <button class="btn" type="button" id="loadTemplatesBtn" style="width:auto;">Buscar modelos existentes</button>
     </div>
-    <div id="templateStatusSummary" class="log-msg" style="margin:-6px 0 12px;" aria-live="polite">Busque no GHL para atualizar os status.</div>
 
     <div id="deleteControls" style="display:none;">
       <label style="font-size:12px;color:var(--muted);margin-bottom:6px;display:block;">Filtrar por status</label>
@@ -997,19 +964,8 @@ const DEFAULT_MOVE_METHOD = {{ default_move_method|tojson }};
 let stopFlag = false;
 let deleteStopFlag = false;
 let loadedTemplates = [];
-let templatesLastSyncedAt = 0;
-let batchHistory = [];
-let companyPresets = [];
 let createAbortController = null;
 let salutationIndex = 0;
-const BATCH_CONFIG_FIELDS = ["location_id", "qty", "lang", "category", "base_name", "date_suffix", "company_name",
-  "header_type", "header_text", "header_media_url", "header_media_name", "body_text", "contact_vars", "example_vars",
-  "footer_text", "buttons_json", "folder_id", "template_folder_key", "header_media_body", "header_media_extra",
-  "header_location_body", "header_loc_lat", "header_loc_lng", "header_loc_name", "header_loc_address", "use_salutation_rotation"];
-const COMPANY_PRESET_FIELDS = ["company_name", "category", "lang", "body_text", "footer_text", "buttons_json",
-  "contact_vars", "example_vars", "use_salutation_rotation", "header_type", "header_text", "header_media_url",
-  "header_media_name", "header_media_body", "header_media_extra", "header_location_body", "header_loc_lat",
-  "header_loc_lng", "header_loc_name", "header_loc_address"];
 
 // Só a PALAVRA de saudação gira. O resto do corpo fica exatamente como você escreveu.
 const SALUTATIONS = ["Ei", "Olá", "Oi", "Eii", "Oii", "Opa"];
@@ -1156,180 +1112,6 @@ function updateProgress(done, total){
   document.getElementById('progressLabel').textContent = done + ' / ' + total;
 }
 
-function batchId(){
-  return (window.crypto && typeof window.crypto.randomUUID === 'function')
-    ? window.crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
-}
-
-function batchConfigFrom(base){
-  const config = {};
-  BATCH_CONFIG_FIELDS.forEach(key => { if(base[key] !== undefined) config[key] = String(base[key] == null ? '' : base[key]); });
-  return config;
-}
-
-function batchCounts(batch){
-  const results = Array.isArray(batch.results) ? batch.results : [];
-  return { created: Number.isFinite(Number(batch.created_count)) ? Number(batch.created_count) : results.filter(r => r.status === 'created').length,
-    failed: Number.isFinite(Number(batch.error_count)) ? Number(batch.error_count) : results.filter(r => r.status === 'failed').length,
-    retryable: results.filter(r => r.status === 'failed' && r.retryable).length };
-}
-
-function renderBatchHistory(){
-  const container = document.getElementById('batchHistory');
-  if(!container) return;
-  container.replaceChildren();
-  if(!batchHistory.length){
-    container.innerHTML = '<div class="empty">Nenhum lote salvo ainda.</div>';
-    return;
-  }
-  batchHistory.forEach(batch => {
-    const counts = batchCounts(batch);
-    const card = document.createElement('div');
-    card.className = 'log-item';
-    card.style.cssText = 'border:1px solid var(--border);border-radius:8px;padding:10px;margin:8px 0;background:#0b1512;';
-    const title = document.createElement('div');
-    title.className = 'log-row';
-    const name = document.createElement('strong');
-    name.className = 'log-name';
-    name.textContent = (batch.base_name || 'Lote') + (batch.company_name ? ' · ' + batch.company_name : '');
-    const tally = document.createElement('span');
-    tally.className = 'tag';
-    tally.textContent = counts.created + '/' + batch.requested + ' criados · ' + counts.failed + ' erro(s)';
-    title.append(name, tally);
-    const meta = document.createElement('div');
-    meta.className = 'log-msg';
-    const date = batch.created_at ? new Date(batch.created_at).toLocaleString('pt-BR') : 'data indisponível';
-    meta.textContent = (batch.subaccount || batch.location_id || 'Subconta') + ' · ' + date + ' · ' +
-      (batch.status === 'completed' ? 'concluído' : batch.status === 'stopped' ? 'interrompido' : 'parcial');
-    const actions = document.createElement('div');
-    actions.className = 'inline-row';
-    actions.style.cssText = 'margin-top:8px;gap:8px;';
-    const csv = document.createElement('button');
-    csv.type = 'button'; csv.className = 'btn ghost'; csv.style.width = 'auto';
-    csv.textContent = 'Baixar relatório CSV'; csv.dataset.batchAction = 'csv'; csv.dataset.batchId = batch.id;
-    actions.appendChild(csv);
-    if(counts.retryable){
-      const retry = document.createElement('button');
-      retry.type = 'button'; retry.className = 'btn ghost'; retry.style.width = 'auto';
-      retry.textContent = 'Tentar novamente (' + counts.retryable + ')';
-      retry.dataset.batchAction = 'retry'; retry.dataset.batchId = batch.id;
-      actions.appendChild(retry);
-    }
-    card.append(title, meta, actions);
-    container.appendChild(card);
-  });
-}
-
-async function loadBatchHistory(){
-  const container = document.getElementById('batchHistory');
-  try{
-    const res = await fetch('/api/batch-history');
-    const data = await res.json();
-    if(data.ok) batchHistory = Array.isArray(data.batches) ? data.batches : [];
-    renderBatchHistory();
-  }catch(err){
-    if(container) container.innerHTML = '<div class="empty">Não foi possível carregar o histórico.</div>';
-  }
-}
-
-async function saveBatchHistory(batch){
-  batch.updated_at = new Date().toISOString();
-  const data = await postJSON('/api/batch-history', { batch });
-  if(data.ok){ batchHistory = Array.isArray(data.batches) ? data.batches : batchHistory; renderBatchHistory(); }
-  return data;
-}
-
-function csvCell(value){
-  let text = String(value == null ? '' : value);
-  if(/^[=+@\-\t\r]/.test(text)) text = "'" + text;
-  return '"' + text.replace(/"/g, '""') + '"';
-}
-
-function downloadCsv(filename, rows){
-  const csv = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
-  const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
-  const link = document.createElement('a');
-  link.href = url; link.download = filename; link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function exportBatchCsv(batch){
-  const rows = [['Data do lote','Subconta','Location ID','Empresa','Nome do modelo','Resultado','Mensagem']];
-  (batch.results || []).forEach(result => rows.push([
-    batch.created_at || '', batch.subaccount || '', batch.location_id || '', batch.company_name || '',
-    result.name || '', result.status === 'created' ? 'Criado' : 'Falhou', result.message || ''
-  ]));
-  const slug = String(batch.base_name || 'lote').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]+/gi,'_').slice(0,50);
-  downloadCsv('axel_lote_' + slug + '.csv', rows);
-}
-
-async function retryBatch(batchIdValue, button){
-  const batch = batchHistory.find(item => item.id === batchIdValue);
-  if(!batch) return;
-  const creds = getCredsFromForm();
-  if(!creds.location_id || creds.location_id !== batch.location_id){
-    await axelAlert('Selecione a mesma subconta deste lote antes de tentar novamente.');
-    return;
-  }
-  if(!creds.auth_token || !creds.token_id){
-    await axelAlert('Capture ou preencha Authorization e token-id antes de tentar novamente.');
-    return;
-  }
-  const targets = (batch.results || []).filter(result => result.status === 'failed' && result.retryable);
-  if(!targets.length) return;
-  const countsBeforeRetry = batchCounts(batch);
-  let resolvedByRetry = 0;
-  button.disabled = true;
-  button.textContent = 'Tentando novamente…';
-  for(const item of targets){
-    const config = batch.config || {};
-    let retryBody = item.body_text || config.body_text || '';
-    if(!item.body_text){
-      const companyName = config.company_name || '[Empresa]';
-      retryBody = retryBody.replace(/\[empresa\]/gi, companyName);
-    }
-    const payload = Object.assign({}, config, creds, { index: item.index, body_text: retryBody });
-    try{
-      const response = await fetch('/api/create-one', {
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
-      });
-      const result = await response.json();
-      item.name = result.name || item.name;
-      item.status = result.ok ? 'created' : 'failed';
-      item.message = result.msg || (result.ok ? 'enviado' : 'falha ao criar');
-      if(result.ok){ delete item.body_text; item.retryable = false; resolvedByRetry++; }
-      if(!result.ok && result.msg === 'HTTP 401') break;
-    }catch(error){
-      item.status = 'failed'; item.message = 'erro de rede: ' + error.message;
-    }
-    await sleep(800);
-  }
-  const counts = {created:Math.min(batch.requested, countsBeforeRetry.created + resolvedByRetry),
-    failed:Math.max(0, countsBeforeRetry.failed - resolvedByRetry)};
-  const remaining = Math.max(0, batch.requested - counts.created);
-  const failures = (batch.results || []).filter(result => result.status === 'failed');
-  batch.created_count = counts.created;
-  batch.error_count = counts.failed;
-  failures.forEach(result => { result.retryable = false; });
-  const retryCount = Math.min(remaining, failures.length);
-  if(retryCount) failures.slice(-retryCount).forEach(result => { result.retryable = true; });
-  batch.status = counts.created >= batch.requested ? 'completed' : 'partial';
-  const saved = await saveBatchHistory(batch);
-  button.disabled = false;
-  if(!saved.ok) await axelAlert(saved.msg || 'Não foi possível atualizar o histórico do lote.');
-  renderBatchHistory();
-}
-
-document.getElementById('batchHistory').addEventListener('click', event => {
-  const button = event.target.closest('button[data-batch-action]');
-  if(!button) return;
-  const batch = batchHistory.find(item => item.id === button.dataset.batchId);
-  if(!batch) return;
-  if(button.dataset.batchAction === 'csv') exportBatchCsv(batch);
-  if(button.dataset.batchAction === 'retry') retryBatch(batch.id, button);
-});
-document.getElementById('refreshBatchHistoryBtn').addEventListener('click', loadBatchHistory);
-
 document.getElementById('stopBtn').addEventListener('click', () => {
   stopFlag = true;
   document.getElementById('stopBtn').disabled = true;
@@ -1405,14 +1187,6 @@ document.getElementById('templateForm').addEventListener('submit', async functio
   let currentIndex = startIndex;
   let successCount = 0;
   let attempts = 0;
-  const subaccountForBatch = SUBACCOUNTS.find(item => String(item.location_id || '') === String(base.location_id));
-  const batchRecord = {
-    id: batchId(), created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    subaccount: (subaccountForBatch && subaccountForBatch.label) || document.getElementById('subaccountName').value.trim() || base.location_id,
-    location_id: String(base.location_id), company_name: String(base.company_name || ''),
-    base_name: String(base.base_name || ''), date_suffix: String(base.date_suffix || ''),
-    requested: qty, created_count: 0, error_count: 0, status: 'running', config: batchConfigFrom(base), results: []
-  };
 
   while(successCount < qty && attempts < maxAttempts && !stopFlag){
     attempts++;
@@ -1459,11 +1233,6 @@ document.getElementById('templateForm').addEventListener('submit', async functio
 
       addLogRow(data.name);
       updateLogRow(data.name, data.ok, data.msg, data.detail);
-      batchRecord.results.push({
-        index: i, name: data.name || ('v' + i + '_' + base.base_name),
-        status: data.ok ? 'created' : 'failed', message: String(data.msg || ''),
-        body_text: data.ok ? undefined : String(payload.body_text || ''), retryable: false
-      });
       if(!data.ok && data.msg === 'HTTP 401'){
         markTokenExpired();
         break;  // token morreu: não adianta tentar os próximos nomes
@@ -1500,8 +1269,6 @@ document.getElementById('templateForm').addEventListener('submit', async functio
       errRow.className = 'log-item';
       errRow.innerHTML = `<div class="log-msg" style="color:var(--danger)">Erro inesperado em v${i}: ${loopErr.message || loopErr}. Continuando...</div>`;
       log.appendChild(errRow);
-      batchRecord.results.push({index:i, name:'v'+i+'_'+base.base_name, status:'failed',
-        message:'erro inesperado', body_text:String(base.body_text || ''), retryable:false});
     }
 
     if(successCount < qty && !stopFlag) await sleep(1500);
@@ -1519,27 +1286,6 @@ document.getElementById('templateForm').addEventListener('submit', async functio
     warn.className = 'log-item';
     warn.innerHTML = `<div class="log-msg" style="color:var(--danger)">Parado após ${attempts} tentativas sem atingir os ${qty} modelos pedidos (${successCount} criados). Verifique os erros acima — pode ser um problema recorrente (ex: token expirado) e não apenas nomes duplicados.</div>`;
     log.appendChild(warn);
-  }
-
-  const batchFinalCounts = {
-    created: batchRecord.results.filter(result => result.status === 'created').length,
-    failed: batchRecord.results.filter(result => result.status === 'failed').length
-  };
-  const unresolved = (batchRecord.results || []).filter(result => result.status === 'failed');
-  batchRecord.created_count = batchFinalCounts.created;
-  batchRecord.error_count = unresolved.length;
-  unresolved.forEach(result => { result.retryable = false; });
-  const retryCount = Math.min(Math.max(0, qty - batchFinalCounts.created), unresolved.length);
-  if(retryCount) unresolved.slice(-retryCount).forEach(result => { result.retryable = true; });
-  unresolved.forEach(result => { if(!result.retryable) delete result.body_text; });
-  batchRecord.results = batchRecord.results.slice(-1000);
-  batchRecord.status = stopFlag ? 'stopped' : batchFinalCounts.created >= qty ? 'completed' : 'partial';
-  const historySave = await saveBatchHistory(batchRecord);
-  if(!historySave.ok){
-    const historyError = document.createElement('div');
-    historyError.className = 'log-item';
-    historyError.innerHTML = `<div class="log-msg" style="color:var(--warn)">O lote terminou, mas não consegui salvar o histórico: ${escapeHtml(historySave.msg || 'erro de gravação')}.</div>`;
-    document.getElementById('log').appendChild(historyError);
   }
 
   createAbortController = null;
@@ -1639,7 +1385,7 @@ function tickTokenTimer(){
     box.className = 'token-timer idle';
     label.textContent = '--:--';
     fill.style.width = '0%';
-    state.textContent = 'Aguardando a extensão. Abra WhatsApp → Modelos no GHL.';
+    state.textContent = 'Aguardando extensão. Abra WhatsApp → Modelos no GHL.';
     note.textContent = '';
     setExpiredUI(false);
     return;
@@ -1704,7 +1450,7 @@ let applyingAutoTokenResponse = false;
     const fp = tokenFingerprint();
     if(fp === tokenTimer.fp) return;
     if(!fp){ tokenTimer = { fp: '', startedAt: 0, confirmedAt: 0 }; saveTokenTimer(); tickTokenTimer(); return; }
-    startTokenTimer();  // token novo colado -> 1 hora do zero
+    startTokenTimer();  // token novo informado ou capturado -> 1 hora do zero
     scheduleFolderSync();  // já sincroniza as pastas da sub-conta selecionada
   });
 });
@@ -1804,41 +1550,8 @@ function getCategoryColor(category) {
   }
 }
 
-function renderTemplateStatusSummary(){
-  const summary = document.getElementById('templateStatusSummary');
-  if(!summary) return;
-  if(!templatesLastSyncedAt){
-    summary.textContent = 'Busque no GHL para atualizar os status.';
-    return;
-  }
-  const counts = {APPROVED:0, REJECTED:0, PENDING:0, OTHER:0};
-  loadedTemplates.forEach(item => {
-    const status = String(item.status || '').toUpperCase();
-    if(Object.prototype.hasOwnProperty.call(counts, status)) counts[status]++;
-    else counts.OTHER++;
-  });
-  const time = new Date(templatesLastSyncedAt).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
-  summary.textContent = 'Atualizado do GHL às ' + time + ' · ' + loadedTemplates.length + ' modelo(s) · ' +
-    counts.APPROVED + ' aprovados · ' + counts.PENDING + ' pendentes · ' + counts.REJECTED + ' rejeitados' +
-    (counts.OTHER ? ' · ' + counts.OTHER + ' outros' : '');
-}
-
-function exportTemplatesCsv(){
-  if(!loadedTemplates.length) return;
-  const locationId = document.getElementById('location_id').value.trim();
-  const sub = SUBACCOUNTS.find(item => String(item.location_id || '') === locationId);
-  const label = (sub && sub.label) || document.getElementById('subaccountName').value.trim() || locationId;
-  const rows = [['Subconta','Location ID','Nome do modelo','Status','Categoria','Idioma','Pasta','ID do GHL']];
-  loadedTemplates.forEach(item => rows.push([label, locationId, item.name, item.status, item.category, item.language, item.folder_id, item.id]));
-  const slug = label.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]+/gi,'_').slice(0,50);
-  downloadCsv('axel_modelos_' + (slug || 'subconta') + '.csv', rows);
-}
-
-document.getElementById('exportTemplatesBtn').addEventListener('click', exportTemplatesCsv);
-
 function renderTemplatesList(){
   const container = document.getElementById('templatesList');
-  renderTemplateStatusSummary();
   const filter = (document.getElementById('deleteFilter').value || '').toLowerCase();
   const checkedBoxes = Array.from(document.querySelectorAll('.statusFilter:checked'));
   const allChecked = checkedBoxes.some(cb => cb.value === 'all');
@@ -1927,7 +1640,7 @@ document.getElementById('loadTemplatesBtn').addEventListener('click', async func
 
   const btn = this;
   btn.disabled = true;
-  btn.textContent = 'Atualizando do GHL...';
+  btn.textContent = 'Buscando...';
 
   try{
     const res = await fetch('/api/list-templates', {
@@ -1940,13 +1653,11 @@ document.getElementById('loadTemplatesBtn').addEventListener('click', async func
     if(!data.ok){
       await axelAlert(data.error || 'Não foi possível buscar os modelos.');
       btn.disabled = false;
-      btn.textContent = 'Atualizar modelos e status do GHL';
+      btn.textContent = 'Buscar modelos existentes';
       return;
     }
 
     loadedTemplates = data.templates || [];
-    templatesLastSyncedAt = Date.now();
-    document.getElementById('exportTemplatesBtn').disabled = !loadedTemplates.length;
     await refreshMoveFolders(true);
     document.getElementById('deleteControls').style.display = loadedTemplates.length ? 'block' : 'none';
     document.getElementById('selectAllTemplates').checked = false;
@@ -1961,7 +1672,7 @@ document.getElementById('loadTemplatesBtn').addEventListener('click', async func
   }
 
   btn.disabled = false;
-  btn.textContent = 'Atualizar modelos e status do GHL';
+  btn.textContent = 'Buscar modelos existentes';
 });
 
 document.getElementById('deleteSelectedBtn').addEventListener('click', async function(){
@@ -2418,9 +2129,6 @@ function fillFolderConfig(s){
 function resetSubaccountScopedUI(){
   resetFolderState();
   loadedTemplates = [];
-  templatesLastSyncedAt = 0;
-  document.getElementById('exportTemplatesBtn').disabled = true;
-  renderTemplateStatusSummary();
   document.getElementById('templatesList').innerHTML = '';
   document.getElementById('deleteControls').style.display = 'none';
   document.getElementById('deleteLog').innerHTML = '';
@@ -2464,20 +2172,26 @@ function requestAutoTokensForCurrentLocation(opts){
   }));
   setTimeout(() => {
     if(pendingAutoTokenRequest !== requestId) return;
+    pendingAutoTokenRequest = 0;
     if(hasSessionTokens()){
-      setAutoTokenStatus('A captura nova não respondeu; o par atual continua preenchido e pode ser usado com o Location ID selecionado.');
+      setAutoTokenStatus('A extensão não respondeu; o par atual continua preenchido e pode ser usado com o Location ID selecionado.');
       return;
     }
-    setAutoTokenStatus('Nenhuma sessão encontrada neste navegador. Abra WhatsApp → Modelos no GHL, capture os tokens uma vez e depois reutilize o par nas subcontas acessíveis, alterando o Location ID.');
-  }, 1600);
+    setAutoTokenStatus('Não recebi resposta da extensão nesta aba. Abra o AXEL no mesmo perfil do Google navegador onde a extensão foi instalada e confira se a versão 1.0.4 está ativa.');
+  }, 3000);
 }
 
 window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
   const data = event.detail || {};
   const locationId = document.getElementById('location_id').value.trim();
   if(data.version !== 1 || data.requestId !== pendingAutoTokenRequest || data.locationId !== locationId) return;
+  pendingAutoTokenRequest = 0;
+  if(data.extensionConnected === false){
+    setAutoTokenStatus('A extensão não está ativa nesta aba. Abra o AXEL no mesmo perfil do Google navegador onde ela foi instalada e tente novamente.');
+    return;
+  }
   if(!data.ok || !data.authToken || !data.tokenId){
-    setAutoTokenStatus('Ainda não há sessão capturada para esta subconta. Abra WhatsApp → Modelos no GHL e tente novamente, ou preencha os dois campos manualmente.');
+    setAutoTokenStatus('A extensão está conectada, mas não há sessão capturada no navegador. Abra WhatsApp → Modelos em uma subconta acessível, aguarde carregar e tente novamente.');
     return;
   }
   const form = document.getElementById('templateForm');
@@ -2492,7 +2206,7 @@ window.addEventListener(AUTO_TOKEN_RESPONSE_EVENT, event => {
   }
   const capturedFor = String(data.capturedForLocationId || locationId);
   setAutoTokenStatus(capturedFor === locationId
-    ? 'Sessão capturada neste navegador e pronta para esta subconta.'
+    ? 'Sessão capturada no navegador e pronta para esta subconta.'
     : 'Sessão capturada na subconta ' + capturedFor + ' reutilizada. O Location ID selecionado define o destino.', 'ok');
 });
 
@@ -3097,89 +2811,6 @@ Object.keys(PRESET_UI).forEach(kind => {
 });
 document.getElementById('body_text').addEventListener('input', updateVarCheck);
 
-function renderCompanyPresetSelect(){
-  const select = document.getElementById('companyPresetSelect');
-  const selected = select.value;
-  select.replaceChildren(new Option(companyPresets.length ? '— escolher empresa salva (' + companyPresets.length + ') —' : '— nenhuma empresa salva —', ''));
-  companyPresets.forEach(item => select.add(new Option(item.name, item.key)));
-  select.value = companyPresets.some(item => item.key === selected) ? selected : '';
-  document.getElementById('deleteCompanyPresetBtn').disabled = !select.value;
-}
-
-async function loadCompanyPresets(){
-  try{
-    const response = await fetch('/api/company-presets');
-    const data = await response.json();
-    if(data.ok) companyPresets = Array.isArray(data.presets) ? data.presets : [];
-  }catch(error){}
-  renderCompanyPresetSelect();
-}
-
-function companyPresetConfig(){
-  const form = document.getElementById('templateForm');
-  const config = {};
-  COMPANY_PRESET_FIELDS.forEach(field => {
-    if(field === 'buttons_json'){ config[field] = JSON.stringify(BUTTONS); return; }
-    const control = form.elements.namedItem(field);
-    if(control) config[field] = control.value;
-  });
-  return config;
-}
-
-function applyCompanyPreset(preset){
-  const form = document.getElementById('templateForm');
-  COMPANY_PRESET_FIELDS.forEach(field => {
-    if(field === 'buttons_json') return;
-    const control = form.elements.namedItem(field);
-    if(control && preset.config[field] !== undefined) control.value = String(preset.config[field]);
-  });
-  try{
-    const savedButtons = JSON.parse(preset.config.buttons_json || '[]');
-    BUTTONS = Array.isArray(savedButtons) ? savedButtons : [];
-  }catch(error){ BUTTONS = []; }
-  setHeaderType(preset.config.header_type || 'NONE');
-  setMediaChoice(preset.config.header_media_url || '', preset.config.header_media_name || '', preset.config.header_type || 'IMAGE');
-  renderButtons();
-  renderPresetSelect('contact_vars');
-  renderPresetSelect('example_vars');
-  updateVarCheck();
-  renderPreview(true);
-}
-
-document.getElementById('companyPresetSelect').addEventListener('change', function(){
-  document.getElementById('deleteCompanyPresetBtn').disabled = !this.value;
-});
-document.getElementById('loadCompanyPresetBtn').addEventListener('click', async () => {
-  const preset = companyPresets.find(item => item.key === document.getElementById('companyPresetSelect').value);
-  if(!preset){ await axelAlert('Escolha uma empresa salva para carregar.'); return; }
-  applyCompanyPreset(preset);
-  setLogEl('companyPresetNote', 'Configuração de ' + preset.name + ' carregada. Ajuste a quantidade, o nome base e a data do lote.', 'ok');
-});
-document.getElementById('saveCompanyPresetBtn').addEventListener('click', async () => {
-  const suggested = document.getElementById('company_name').value.trim();
-  const name = (await showAxelDialog({kind:'prompt', title:'Salvar configuração da empresa',
-    message:'Esse preset guarda corpo, rodapé, botões, variáveis, categoria e cabeçalho. Credenciais, pasta, quantidade e data não são salvas.',
-    value:suggested, acceptLabel:'Salvar configuração', cancelLabel:'Cancelar'}) || '').trim();
-  if(!name) return;
-  const key = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
-  const existed = companyPresets.some(item => item.key === key || item.name.toLowerCase() === name.toLowerCase());
-  if(existed && !await axelConfirm('Já existe uma configuração para "' + name + '". Atualizar com os campos atuais?')) return;
-  const config = companyPresetConfig();
-  if(!config.company_name || config.company_name === '[Empresa]') config.company_name = name;
-  const data = await postJSON('/api/company-presets', {name, config});
-  if(data.ok){ companyPresets = data.presets || companyPresets; renderCompanyPresetSelect(); document.getElementById('companyPresetSelect').value = data.key; }
-  setLogEl('companyPresetNote', data.msg || 'Não consegui salvar o preset.', data.ok ? 'ok' : 'err');
-});
-document.getElementById('deleteCompanyPresetBtn').addEventListener('click', async () => {
-  const key = document.getElementById('companyPresetSelect').value;
-  const preset = companyPresets.find(item => item.key === key);
-  if(!preset) return;
-  if(!await axelConfirm('Apagar a configuração salva de "' + preset.name + '"?')) return;
-  const data = await postJSON('/api/company-presets/delete', {key});
-  if(data.ok){ companyPresets = data.presets || []; renderCompanyPresetSelect(); }
-  setLogEl('companyPresetNote', data.msg || 'Não consegui apagar.', data.ok ? 'ok' : 'err');
-});
-
 // ---------- Cabeçalho com mídia (Atualização 16.1) ----------
 
 const MEDIA_INFO = {
@@ -3270,7 +2901,7 @@ function renderMediaList(){
 async function loadMediaLibrary(){
   const creds = getCredsFromForm();
   if(!creds.location_id || !creds.auth_token || !creds.token_id){
-  setMediaLog('Selecione a subconta e abra WhatsApp → Modelos no GHL para capturar a sessão automaticamente.', 'err');
+    setMediaLog('Selecione a subconta e abra WhatsApp → Modelos no GHL para capturar a sessão automaticamente.', 'err');
     return;
   }
   setMediaLog('Buscando mídias da sub-conta...');
@@ -3295,7 +2926,7 @@ async function uploadMediaFile(file){
   if(file.size > limits[t] * 1024 * 1024){ setMediaLog('Arquivo maior que ' + limits[t] + ' MB (limite da Meta).', 'err'); return; }
   const creds = getCredsFromForm();
   if(!creds.location_id || !creds.auth_token || !creds.token_id){
-  setMediaLog('Selecione a subconta e abra WhatsApp → Modelos no GHL para capturar a sessão automaticamente.', 'err');
+    setMediaLog('Selecione a subconta e abra WhatsApp → Modelos no GHL para capturar a sessão automaticamente.', 'err');
     return;
   }
   const fd = new FormData();
@@ -3813,8 +3444,6 @@ renderButtons();
 loadBodies();
 renderPreview(true);
 loadPresets();
-loadCompanyPresets();
-loadBatchHistory();
 renderTemplateStatusSummary();
 initSubaccounts();
 </script>
@@ -4774,7 +4403,7 @@ def api_list_templates():
             "ok": False,
             "templates": [],
             "error": "Não foi possível consultar os modelos. Confira as credenciais "
-            "(a sessão pode ter expirado — abra WhatsApp → Modelos no GHL para atualizar automaticamente) e tente de novo.",
+                     "(a sessão pode ter expirado — abra WhatsApp → Modelos no GHL para atualizar automaticamente) e tente de novo.",
         })
     return jsonify({"ok": True, "templates": items})
 
@@ -5299,157 +4928,6 @@ def api_presets_delete():
         except OSError as e:
             return jsonify({"ok": False, "msg": f"não consegui salvar: {e}"})
     return jsonify({"ok": True, "presets": presets, "msg": "opção apagada"})
-
-
-def load_company_presets():
-    data = read_store(COMPANY_PRESETS_FILE)
-    items = data.get("items") if isinstance(data.get("items"), dict) else {}
-    result = []
-    for key, item in items.items():
-        if not isinstance(item, dict) or not isinstance(item.get("config"), dict):
-            continue
-        result.append({"key": key, "name": str(item.get("name") or key), "config": item["config"]})
-    result.sort(key=lambda item: item["name"].casefold())
-    return result
-
-
-@app.route("/api/company-presets", methods=["GET"])
-def api_company_presets():
-    return jsonify({"ok": True, "presets": load_company_presets()})
-
-
-@app.route("/api/company-presets", methods=["POST"])
-def api_company_presets_save():
-    data = request.get_json(force=True)
-    name = str(data.get("name") or "").strip()[:80]
-    key = subaccount_key(name)
-    raw = data.get("config")
-    if not key or not isinstance(raw, dict):
-        return jsonify(ok=False, msg="Informe o nome da empresa e os campos da configuração."), 400
-    config = {}
-    for field in COMPANY_PRESET_FIELDS:
-        value = raw.get(field)
-        if field == "use_salutation_rotation":
-            config[field] = value is True or str(value).lower() == "true"
-        else:
-            config[field] = str(value or "")
-    if len(config["body_text"]) > 1024 or len(config["footer_text"]) > 60:
-        return jsonify(ok=False, msg="O corpo deve ter até 1024 caracteres e o rodapé até 60."), 400
-    if len(config["buttons_json"]) > 20000:
-        return jsonify(ok=False, msg="A configuração dos botões está grande demais."), 400
-    try:
-        buttons = json.loads(config["buttons_json"] or "[]")
-        if not isinstance(buttons, list) or len(buttons) > MAX_BUTTONS:
-            raise ValueError("invalid buttons")
-    except (ValueError, TypeError):
-        return jsonify(ok=False, msg="A configuração dos botões não é válida."), 400
-    with _STORE_LOCK:
-        store = read_store(COMPANY_PRESETS_FILE)
-        items = store.get("items") if isinstance(store.get("items"), dict) else {}
-        previous = items.get(key)
-        if previous is None and len(items) >= 200:
-            return jsonify(ok=False, msg="O limite de 200 configurações salvas foi atingido."), 400
-        items[key] = {"name": name, "config": config}
-        try:
-            write_store(COMPANY_PRESETS_FILE, {"items": items})
-        except OSError as e:
-            return jsonify(ok=False, msg=f"Não consegui salvar: {e}"), 500
-    return jsonify(ok=True, key=key, name=name, existed=isinstance(previous, dict),
-                   presets=load_company_presets(), msg="Configuração salva.")
-
-
-@app.route("/api/company-presets/delete", methods=["POST"])
-def api_company_presets_delete():
-    data = request.get_json(force=True)
-    key = str(data.get("key") or subaccount_key(str(data.get("name") or "")))
-    with _STORE_LOCK:
-        store = read_store(COMPANY_PRESETS_FILE)
-        items = store.get("items") if isinstance(store.get("items"), dict) else {}
-        if key not in items:
-            return jsonify(ok=False, msg="Configuração da empresa não encontrada."), 404
-        del items[key]
-        try:
-            write_store(COMPANY_PRESETS_FILE, {"items": items})
-        except OSError as e:
-            return jsonify(ok=False, msg=f"Não consegui apagar: {e}"), 500
-    return jsonify(ok=True, presets=load_company_presets(), msg="Configuração apagada.")
-
-
-def _clean_batch_result(raw):
-    if not isinstance(raw, dict):
-        return None
-    try:
-        index = max(0, min(int(raw.get("index", 0)), 100000))
-    except (TypeError, ValueError):
-        index = 0
-    status = raw.get("status") if raw.get("status") in ("created", "failed") else "failed"
-    result = {"index": index, "name": str(raw.get("name") or "")[:200], "status": status,
-              "message": str(raw.get("message") or "")[:300],
-              "retryable": status == "failed" and raw.get("retryable") is True}
-    if status == "failed" and raw.get("body_text") is not None:
-        result["body_text"] = str(raw.get("body_text") or "")[:1024]
-    return result
-
-
-def _clean_batch_record(raw):
-    if not isinstance(raw, dict):
-        return None
-    batch_id = str(raw.get("id") or "")[:80]
-    if not re.fullmatch(r"[A-Za-z0-9_-]{8,80}", batch_id):
-        return None
-    try:
-        requested = max(1, min(int(raw.get("requested", 1)), MAX_QTY))
-    except (TypeError, ValueError):
-        requested = 1
-    try:
-        created_count = max(0, min(int(raw.get("created_count", 0) or 0), MAX_QTY))
-    except (TypeError, ValueError):
-        created_count = 0
-    try:
-        error_count = max(0, min(int(raw.get("error_count", 0) or 0), MAX_QTY * 5 + 20))
-    except (TypeError, ValueError):
-        error_count = 0
-    raw_config = raw.get("config") if isinstance(raw.get("config"), dict) else {}
-    config = {field: str(raw_config.get(field) or "") for field in BATCH_CONFIG_FIELDS if field in raw_config}
-    # Credenciais são excluídas por allowlist: Authorization e token-id nunca entram no histórico.
-    raw_results = raw.get("results") if isinstance(raw.get("results"), list) else []
-    results = [_clean_batch_result(item) for item in raw_results[-1000:]]
-    results = [item for item in results if item]
-    status = raw.get("status") if raw.get("status") in ("running", "completed", "partial", "stopped") else "partial"
-    return {
-        "id": batch_id, "created_at": str(raw.get("created_at") or "")[:40],
-        "updated_at": str(raw.get("updated_at") or "")[:40],
-        "subaccount": str(raw.get("subaccount") or "")[:100],
-        "location_id": str(raw.get("location_id") or "")[:100],
-        "company_name": str(raw.get("company_name") or "")[:100],
-        "base_name": str(raw.get("base_name") or "")[:100],
-        "date_suffix": str(raw.get("date_suffix") or "")[:40],
-        "created_count": created_count, "error_count": error_count,
-        "requested": requested, "status": status, "config": config, "results": results,
-    }
-
-
-@app.route("/api/batch-history", methods=["GET", "POST"])
-def api_batch_history():
-    if request.method == "GET":
-        meta = read_store(META_FILE)
-        batches = meta.get("batch_history") if isinstance(meta.get("batch_history"), list) else []
-        return jsonify(ok=True, batches=batches[:BATCH_HISTORY_LIMIT])
-    data = request.get_json(force=True)
-    record = _clean_batch_record(data.get("batch") if isinstance(data, dict) else None)
-    if not record:
-        return jsonify(ok=False, msg="O registro do lote não é válido."), 400
-    with _STORE_LOCK:
-        meta = read_store(META_FILE)
-        batches = meta.get("batch_history") if isinstance(meta.get("batch_history"), list) else []
-        batches = [item for item in batches if not isinstance(item, dict) or item.get("id") != record["id"]]
-        batches.insert(0, record)
-        meta["batch_history"] = batches[:BATCH_HISTORY_LIMIT]
-        try:
-            write_store(META_FILE, meta)
-        except OSError as e:
-            return jsonify(ok=False, msg=f"Não consegui salvar o histórico: {e}"), 500
-    return jsonify(ok=True, batches=meta["batch_history"])
 
 
 def subaccount_selection_settings(key, entry):
