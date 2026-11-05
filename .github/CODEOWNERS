@@ -1,6 +1,6 @@
 # Preserve the creator attribution and its automated integrity check.
 # Enable required CODEOWNERS review in the main branch ruleset.
- /wsgi.py @Yuriihx
+/wsgi.py @Yuriihx
 /.github/CODEOWNERS @Yuriihx
 /.github/scripts/verify_creator_watermark.py @Yuriihx
 /.github/workflows/verify-creator-watermark.yml @Yuriihx
