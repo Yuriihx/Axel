@@ -1,0 +1,25 @@
+name: Verify creator watermark
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  creator-watermark:
+    name: Verify creator watermark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify fixed creator attribution
+        run: python .github/scripts/verify_creator_watermark.py
