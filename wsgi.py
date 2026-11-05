@@ -325,11 +325,22 @@ _LOGOUT_FORM = """
 
 _CREATOR_WATERMARK = """
 <style>
-.axel-creator-watermark{position:fixed;left:12px;bottom:3px;z-index:850;max-width:calc(100vw - 24px);color:#9bb7aa;opacity:.76;font:11px/1.4 system-ui,sans-serif;letter-spacing:.02em;text-shadow:0 1px 3px #000;pointer-events:none;user-select:none}
-.axel-creator-watermark strong{font-weight:600}
-@media(max-width:480px){.axel-creator-watermark{font-size:9px}}
+.axel-creator-watermark{position:fixed;left:14px;bottom:12px;z-index:850;display:flex;align-items:center;gap:9px;max-width:calc(100vw - 28px);padding:7px 12px 7px 7px;color:#c8d7d0;background:rgba(8,19,16,.84);border:1px solid rgba(108,159,140,.35);border-radius:999px;box-shadow:0 8px 26px rgba(0,0,0,.24);backdrop-filter:blur(10px);font:11px/1.15 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.02em;user-select:none}
+.axel-watermark-mark{display:grid;place-items:center;flex:0 0 25px;height:25px;border-radius:50%;color:#05231a;background:linear-gradient(135deg,#43e0aa,#20bf89);font-size:10px;font-weight:800;letter-spacing:.02em}
+.axel-watermark-copy{display:flex;align-items:center;gap:6px;min-width:0}
+.axel-watermark-label{color:#9bb7aa;font-weight:500}
+.axel-watermark-link{display:inline-flex;align-items:center;gap:6px;color:#e8f7f1;text-decoration:none;font-weight:650;white-space:nowrap}
+.axel-watermark-link:hover,.axel-watermark-link:focus-visible{color:#4ee1af;text-decoration:underline;text-underline-offset:3px;outline:none}
+.axel-watermark-linkedin{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:4px;background:#0a66c2;color:#fff;font:700 10px/1 system-ui,sans-serif}
+@media(max-width:480px){.axel-creator-watermark{left:8px;bottom:8px;gap:7px;padding:6px 9px;max-width:calc(100vw - 16px);font-size:10px}.axel-watermark-mark{flex-basis:22px;height:22px}}
 </style>
-<aside class="axel-creator-watermark" aria-label="Criador do sistema: Yuri Bibiano dos Santos">Criado por <strong>Yuri Bibiano dos Santos</strong></aside>
+<aside class="axel-creator-watermark" aria-label="Criador do sistema">
+  <span class="axel-watermark-mark" aria-hidden="true">YB</span>
+  <span class="axel-watermark-copy">
+    <span class="axel-watermark-label">Criado por</span>
+    <a class="axel-watermark-link" href="https://www.linkedin.com/in/yuribibiano/" target="_blank" rel="noopener noreferrer" aria-label="Yuri Bibiano dos Santos no LinkedIn">Yuri Bibiano dos Santos <span class="axel-watermark-linkedin" aria-hidden="true">in</span></a>
+  </span>
+</aside>
 """
 
 _LOGIN_PAGE = """<!doctype html>
